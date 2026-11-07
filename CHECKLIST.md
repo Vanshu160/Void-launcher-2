@@ -54,3 +54,9 @@
 - [ ] Engine API contracts
 - [ ] Touch controls
 - [ ] Logs and diagnostics
+
+## Milestone 0.7.0d - GLFW and MojoSDL build (in progress)
+- [x] Pinned MojoLauncher GLFW (`7900e19`) and MojoSDL (`b81efe9`), with the fork's build options
+- [x] mojoexec pin matched to the fork (`27790c5`)
+- [ ] CI build passes (arm64 `libglfw.so` and `libSDL3.so` built, not linked yet)
+- [ ] Java bridge classes (`git.artdeell.dnbootstrap.glfw`, `git.mojo.sdl`) added, next step
