@@ -3,6 +3,7 @@ package com.voidlauncher.app.ui.versions
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.voidlauncher.app.data.SelectedVersion
 import com.voidlauncher.app.data.VersionRepository
 import com.voidlauncher.app.data.local.VersionCache
 import com.voidlauncher.app.domain.model.VersionFilter
@@ -16,7 +17,7 @@ class VersionsViewModel(application: Application) : AndroidViewModel(application
 
     private val repository = VersionRepository(VersionCache(application))
 
-    private val _uiState = MutableStateFlow(VersionsUiState())
+    private val _uiState = MutableStateFlow(VersionsUiState(selectedId = SelectedVersion.flow.value))
     val uiState: StateFlow<VersionsUiState> = _uiState.asStateFlow()
 
     init {
@@ -57,6 +58,7 @@ class VersionsViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun select(id: String) {
+        SelectedVersion.set(id)
         _uiState.update { it.copy(selectedId = id) }
     }
 }

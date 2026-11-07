@@ -1,30 +1,29 @@
 # Void Launcher development checklist
 
 ## Milestone 0.1.0 - Foundation (complete)
-- [x] GitHub repository, Gradle skeleton, CI APK build
-- [x] Theme, navigation, Home screen
-- [x] Verified on a phone
+- [x] Gradle skeleton, CI APK build, theme, navigation, Home screen
 - [x] License: GPL-3.0 (`LICENSE`) and third-party notices (`THIRD_PARTY.md`)
 
 ## Milestone 0.2.0 - Version manager (complete)
-- [x] Fetch Mojang's official version manifest
-- [x] Offline cache, release and snapshot filters
-- [x] Verified on a phone
+- [x] Mojang version manifest, offline cache, release and snapshot filters
 
-## Milestone 0.3.0 - Landscape UI overhaul
-- [x] Landscape orientation
-- [x] Animated backdrop with a Settings toggle
-- [x] Top tab navigation with animated pills
-- [x] Home screen with shortcut tiles and account card
-- [x] Versions screen with radio selection
-- [x] Settings tabs: Video, Controls, Game, Launcher, Experimental
+## Milestone 0.3.0 - Landscape UI overhaul (complete)
+- [x] Landscape layout, animated backdrop, top tabs, Settings tabs
+
+## Milestone 0.4.0 - Mods (Fabric via Modrinth)
+- [x] Search Modrinth for Fabric mods matching the selected version
+- [x] Install with SHA-1 check and required dependencies (one level)
+- [x] Per-version mods folder, installed list, remove
+- [x] Selected version shared between Versions, Home and Mods
 - [ ] CI build passes
 - [ ] Verified on a phone
-- [ ] Settings saved between launches (next: DataStore)
-- [ ] Connect the selected version to the Home screen
+- [ ] Fabric loader install (needs the engine milestone)
+- [ ] Quilt, NeoForge, Forge
+- [ ] OptiFine: import a jar you downloaded yourself
 
 ## Later milestones
-- [ ] Downloads
+- [ ] Downloads (game files)
+- [ ] Settings saved between launches
 - [ ] Microsoft login
 - [ ] Java runtime management
 - [ ] Engine API contracts

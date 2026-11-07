@@ -20,6 +20,7 @@ import com.voidlauncher.app.ui.components.VoidBackdrop
 import com.voidlauncher.app.ui.components.VoidTab
 import com.voidlauncher.app.ui.components.VoidTabRow
 import com.voidlauncher.app.ui.home.HomeScreen
+import com.voidlauncher.app.ui.mods.ModsScreen
 import com.voidlauncher.app.ui.placeholder.PlaceholderScreen
 import com.voidlauncher.app.ui.settings.SettingsScreen
 import com.voidlauncher.app.ui.settings.SettingsViewModel
@@ -73,6 +74,9 @@ fun VoidApp() {
                 }
                 composable(Destination.Versions.route) {
                     VersionsScreen()
+                }
+                composable(Destination.Mods.route) {
+                    ModsScreen()
                 }
                 composable(Destination.Downloads.route) {
                     PlaceholderScreen("Downloads", "The download manager arrives in a later milestone.")
