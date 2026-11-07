@@ -10,10 +10,12 @@ import java.util.Locale
 
 /**
  * A small log kept in the app's private storage. It records launch steps, Java crashes,
- * native crashes and JVM crash reports, so the text can be copied from the Downloads screen.
+ * native crashes, JVM crash reports and JVM console output, so the text can be copied from
+ * the Downloads screen.
  */
 object AppLog {
     private const val MAX_BYTES = 200_000
+    private const val JVM_OUTPUT_NAME = "void-log.txt.jvm-out"
     private var file: File? = null
     private val time = SimpleDateFormat("HH:mm:ss", Locale.US)
 
@@ -21,10 +23,11 @@ object AppLog {
         val target = File(context.filesDir, "void-log.txt")
         file = target
         importJvmErrorFiles(context.filesDir)
+        importJvmOutput(context.filesDir)
         installCrashHandler()
     }
 
-    /** Absolute path of the log file, used by the native crash catcher. Empty before init. */
+    /** Absolute path of the log file, used by the native code. Empty before init. */
     fun path(): String = file?.absolutePath ?: ""
 
     @Synchronized
@@ -65,6 +68,22 @@ object AppLog {
             } catch (e: Exception) {
                 // Ignore unreadable reports.
             }
+        }
+    }
+
+    /** Copies the JVM's console output from the last launch into the log, then removes it. */
+    private fun importJvmOutput(dir: File) {
+        val target = file ?: return
+        val output = File(dir, JVM_OUTPUT_NAME)
+        if (!output.isFile) return
+        try {
+            val text = output.readText().take(60_000)
+            if (text.isNotBlank()) {
+                target.appendText("--- JVM console output (from the last launch) ---\n$text\n")
+            }
+            output.delete()
+        } catch (e: Exception) {
+            // Ignore unreadable output.
         }
     }
 

@@ -7,11 +7,14 @@
 #include <unistd.h>
 #include <unwind.h>
 
-// Native crash catcher. When the process gets a fatal signal, the signal, fault address,
-// call stack and memory map are appended to the launch log, then the default crash runs.
-// The memory map lets us match the addresses to library names later.
+// Native crash catcher and JVM console capture.
+// When the process gets a fatal signal, the signal, fault address, call stack and memory map
+// are appended to the launch log, then the default crash runs.
+// The JVM's stdout and stderr are redirected to a file next to the log, so its error messages
+// reach the app instead of only Android's system log.
 
 static char crash_log_path[512];
+static char jvm_output_path[600];
 
 static void write_text(int fd, const char *text) {
     size_t len = strlen(text);
@@ -94,7 +97,7 @@ static void crash_handler(int signal_number, siginfo_t *info, void *context) {
 JNIEXPORT jstring JNICALL
 Java_com_voidlauncher_app_NativeBridge_nativeVersion(JNIEnv *env, jclass clazz) {
     (void) clazz;
-    return (*env)->NewStringUTF(env, "voidnative 0.8.2");
+    return (*env)->NewStringUTF(env, "voidnative 0.8.3");
 }
 
 JNIEXPORT void JNICALL
@@ -105,7 +108,16 @@ Java_com_voidlauncher_app_NativeBridge_installCrashLog(JNIEnv *env, jclass clazz
         return;
     }
     snprintf(crash_log_path, sizeof crash_log_path, "%s", text);
+    snprintf(jvm_output_path, sizeof jvm_output_path, "%s.jvm-out", text);
     (*env)->ReleaseStringUTFChars(env, path, text);
+
+    // Send the JVM's stdout and stderr to a fresh file for this launch.
+    int output = open(jvm_output_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (output >= 0) {
+        dup2(output, STDOUT_FILENO);
+        dup2(output, STDERR_FILENO);
+        close(output);
+    }
 
     struct sigaction action;
     memset(&action, 0, sizeof action);
