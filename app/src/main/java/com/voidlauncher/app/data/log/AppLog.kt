@@ -15,7 +15,8 @@ import java.util.Locale
  */
 object AppLog {
     private const val MAX_BYTES = 200_000
-    private const val IMPORT_LIMIT = 60_000
+    private const val HEAD_CHARS = 8_000
+    private const val TAIL_CHARS = 40_000
     private const val JVM_OUTPUT_NAME = "void-log.txt.jvm-out"
     private var file: File? = null
     private val time = SimpleDateFormat("HH:mm:ss", Locale.US)
@@ -58,12 +59,20 @@ object AppLog {
         }
     }
 
+    /** Keeps the start and the end of a long text. The start holds the crash reason. */
+    private fun headAndTail(text: String): String {
+        if (text.length <= HEAD_CHARS + TAIL_CHARS) return text
+        return text.take(HEAD_CHARS) +
+            "\n... (${text.length - HEAD_CHARS - TAIL_CHARS} characters left out) ...\n" +
+            text.takeLast(TAIL_CHARS)
+    }
+
     /** Copies JVM crash reports (jvm-error-<pid>.log) from an earlier run into the log, then removes them. */
     private fun importJvmErrorFiles(dir: File) {
         val target = file ?: return
         dir.listFiles { f -> f.isFile && f.name.startsWith("jvm-error-") }?.forEach { report ->
             try {
-                val text = report.readText().takeLast(IMPORT_LIMIT)
+                val text = headAndTail(report.readText())
                 target.appendText("--- JVM crash report ${report.name} (from an earlier run) ---\n$text\n")
                 report.delete()
             } catch (e: Exception) {
@@ -78,10 +87,9 @@ object AppLog {
         val output = File(dir, JVM_OUTPUT_NAME)
         if (!output.isFile) return
         try {
-            // The end of the output is kept: that is where the errors are.
-            val text = output.readText().takeLast(IMPORT_LIMIT)
+            val text = headAndTail(output.readText())
             if (text.isNotBlank()) {
-                target.appendText("--- JVM console output (from the last launch, last part) ---\n$text\n")
+                target.appendText("--- JVM console output (from the last launch) ---\n$text\n")
             }
             output.delete()
         } catch (e: Exception) {
