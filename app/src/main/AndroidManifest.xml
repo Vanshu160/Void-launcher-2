@@ -6,6 +6,7 @@
     <application
         android:name=".VoidApplication"
         android:allowBackup="false"
+        android:allowNativeHeapPointerTagging="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
