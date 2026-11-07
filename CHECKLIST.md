@@ -35,11 +35,13 @@
 
 ## Milestone 0.7.0 - Native engine (in progress)
 - [x] 0.7.0a: NDK 29 and CMake 3.22.1 build a native library in CI
-- [ ] 0.7.0b: mojoexec built from a pinned commit (CI check pending)
-- [ ] 0.7.0c: launcher hooks (mojort) and GLFW
-- [ ] 0.7.0d: MojoSDL
+- [x] 0.7.0b: mojoexec built from a pinned commit in CI
+- [ ] 0.7.0c: launcher hooks (mojort) built from the pinned PojavLauncher fork (CI check pending)
+- [ ] 0.7.0d: GLFW
+- [ ] 0.7.0e: MojoSDL
 
 ## Later milestones
+- [ ] Java bridge classes that the native hooks call (net.kdt.pojavlaunch.*)
 - [ ] Settings saved between launches
 - [ ] Microsoft login
 - [ ] Engine API contracts
