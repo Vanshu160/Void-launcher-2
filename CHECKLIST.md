@@ -31,20 +31,26 @@
 - [x] Archives checked with RSA-4096 signatures before unpacking
 - [x] Java 21 downloaded and ready on device
 - [ ] Runtime license verified (blocks public release)
-- [ ] unpack200 step and libawt dummy (needed before the engine can run)
+- [ ] unpack200 step and libawt dummy (needed before the game can run fully)
 
-## Milestone 0.7.0 - Native engine (in progress)
+## Milestone 0.7.0 - Native engine (complete in code)
 - [x] 0.7.0a: NDK 29 and CMake 3.22.1 build a native library in CI
 - [x] 0.7.0b: mojoexec built from a pinned commit in CI
-- [ ] 0.7.0c: launcher hooks (mojort) built from the pinned PojavLauncher fork (CI check pending)
-- [ ] 0.7.0d: GLFW
+- [x] 0.7.0c: launcher hooks (mojort) built from the pinned PojavLauncher fork in CI
+- [ ] 0.7.0d: GLFW (window)
 - [ ] 0.7.0e: MojoSDL
+- [ ] 0.7.0f: native LWJGL libraries extracted from the game's natives
+
+## Milestone 0.8.0 - First launch attempt (in progress)
+- [x] JNI bridge classes and a minimal launcher (GameLauncher) written
+- [x] "Start game (first test)" button on the Downloads screen
+- [ ] CI build passes
+- [ ] First run on a phone: JVM starts (result to be recorded)
+- [ ] Minecraft main menu appears (needs GLFW, natives and touch input)
 
 ## Later milestones
-- [ ] Java bridge classes that the native hooks call (net.kdt.pojavlaunch.*)
 - [ ] Settings saved between launches
 - [ ] Microsoft login
 - [ ] Engine API contracts
-- [ ] Pojav adapter (first game launch)
 - [ ] Touch controls
 - [ ] Logs and diagnostics

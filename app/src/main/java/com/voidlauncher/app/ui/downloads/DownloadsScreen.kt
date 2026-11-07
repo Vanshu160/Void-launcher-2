@@ -68,7 +68,7 @@ fun DownloadsScreen(viewModel: DownloadsViewModel = viewModel()) {
 
             Button(
                 onClick = viewModel::startDownload,
-                enabled = selected != null && !state.isDownloading,
+                enabled = selected != null && !state.isDownloading && !state.isLaunching,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(if (state.isDownloading) "Downloading..." else "Download game files")
@@ -81,6 +81,14 @@ fun DownloadsScreen(viewModel: DownloadsViewModel = viewModel()) {
                 ) {
                     Text("Cancel")
                 }
+            }
+
+            Button(
+                onClick = viewModel::startGame,
+                enabled = selected != null && !state.isDownloading && !state.isLaunching,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(if (state.isLaunching) "Starting..." else "Start game (first test)")
             }
 
             state.message?.let { message ->

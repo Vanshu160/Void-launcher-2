@@ -54,3 +54,7 @@ Check each library's own license before adding it.
 - **Pinned commit:** `b32a74357b1f064193beebfe1baa12c226568353`
 - **How it's used:** CMake fetches the pinned commit at build time and compiles only the JNI hook sources (`jvm_hooks/`, `jre_launcher/`, `utils.c`, `stdio_is.c`, `minibridge.c`). Nothing is copied into this repository.
 - **Note:** the LGPL notices in those source files stay in the fetched copy. Void Launcher is GPL-3.0, which is compatible with LGPL-3.0.
+
+## JNI bridge classes (written for Void Launcher)
+- `net.kdt.pojavlaunch.utils.jre.JavaRunner` and `net.kdt.pojavlaunch.utils.JREUtils` are small Kotlin classes written for Void Launcher. Their package and method names must match the native code in libmojort.so (PojavLauncher, LGPL-3.0). No PojavLauncher Java code is copied.
+- `GameLauncher` follows the steps of PojavLauncher's `JavaRunner.startJvm` (LGPL-3.0) in simplified form, rewritten in Kotlin.
