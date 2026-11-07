@@ -21,6 +21,8 @@ object VersionManifestParser {
                             else -> VersionType.OTHER
                         },
                         releaseTime = entry.optString("releaseTime"),
+                        metadataUrl = entry.optString("url"),
+                        metadataSha1 = entry.optString("sha1", "").takeIf { it.isNotEmpty() },
                     ),
                 )
             }

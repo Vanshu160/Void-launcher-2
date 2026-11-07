@@ -21,12 +21,19 @@
 - [ ] Quilt, NeoForge, Forge
 - [ ] OptiFine: import a jar you downloaded yourself
 
+## Milestone 0.5.0 - Game files download (in progress)
+- [x] Version metadata, client jar, libraries and assets downloaded with SHA-1 checks
+- [x] Existing valid files are skipped, so an interrupted download can resume
+- [x] Downloads screen with progress, cancel and error messages
+- [ ] CI build passes
+- [ ] Verified on a phone
+- [ ] Native libraries extracted (engine milestone)
+
 ## Later milestones
-- [ ] Downloads (game files)
+- [ ] Java runtime management (Java major version is already read from metadata)
 - [ ] Settings saved between launches
 - [ ] Microsoft login
-- [ ] Java runtime management
 - [ ] Engine API contracts
-- [ ] Pojav adapter
+- [ ] Pojav adapter (first game launch)
 - [ ] Touch controls
 - [ ] Logs and diagnostics

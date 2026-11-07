@@ -19,6 +19,7 @@ import androidx.navigation.compose.rememberNavController
 import com.voidlauncher.app.ui.components.VoidBackdrop
 import com.voidlauncher.app.ui.components.VoidTab
 import com.voidlauncher.app.ui.components.VoidTabRow
+import com.voidlauncher.app.ui.downloads.DownloadsScreen
 import com.voidlauncher.app.ui.home.HomeScreen
 import com.voidlauncher.app.ui.mods.ModsScreen
 import com.voidlauncher.app.ui.placeholder.PlaceholderScreen
@@ -79,7 +80,7 @@ fun VoidApp() {
                     ModsScreen()
                 }
                 composable(Destination.Downloads.route) {
-                    PlaceholderScreen("Downloads", "The download manager arrives in a later milestone.")
+                    DownloadsScreen()
                 }
                 composable(Destination.Settings.route) {
                     SettingsScreen(viewModel = settingsViewModel)
