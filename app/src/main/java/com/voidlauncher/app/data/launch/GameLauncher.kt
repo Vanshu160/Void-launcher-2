@@ -2,6 +2,8 @@ package com.voidlauncher.app.data.launch
 
 import android.content.Context
 import android.system.Os
+import com.voidlauncher.app.NativeBridge
+import com.voidlauncher.app.data.log.AppLog
 import com.voidlauncher.app.data.remote.GameMetadataParser
 import com.voidlauncher.app.data.runtime.JavaRuntimeManager
 import com.voidlauncher.app.data.runtime.JavaRuntimeSpec
@@ -24,6 +26,7 @@ class GameLauncher(private val context: Context) {
     private fun loadNative() {
         System.loadLibrary("mojoexec")
         System.loadLibrary("mojort")
+        AppLog.write("Native bridge: ${NativeBridge.nativeVersion()}")
     }
 
     /** Starts the game. Returns after starting the JVM thread. Progress goes to [onStatus]. */
@@ -38,11 +41,13 @@ class GameLauncher(private val context: Context) {
         val runtimeHome = runtimes.home(spec)
         val vmPath = runtimeHome.walkTopDown().firstOrNull { it.isFile && it.name == "libjvm.so" }
             ?: error("libjvm.so was not found in the Java runtime.")
+        AppLog.write("libjvm.so: ${vmPath.absolutePath}")
 
         gameDir.mkdirs()
         val classpath = (listOf(File(minecraftRoot, metadata.client.relativePath)) +
             metadata.libraries.map { File(minecraftRoot, it.relativePath) })
             .joinToString(":") { it.absolutePath }
+        AppLog.write("Classpath entries: ${classpath.split(":").size}")
 
         val javaArgs = mutableListOf(
             "-Xms512M",
@@ -53,6 +58,8 @@ class GameLauncher(private val context: Context) {
             "-Dpojav.path.minecraft=${minecraftRoot.absolutePath}",
             "-Dorg.lwjgl.system.allocator=system",
             "-Djava.class.path=$classpath",
+            // If the JVM itself crashes, it writes its report here. The app copies it into the log on next start.
+            "-XX:ErrorFile=${File(context.filesDir, "jvm-error-%p.log").absolutePath}",
         )
 
         val values = mapOf(
@@ -99,15 +106,26 @@ class GameLauncher(private val context: Context) {
         Os.setenv("TMPDIR", context.cacheDir.absolutePath, true)
         Os.setenv("LD_LIBRARY_PATH", ldPath, true)
         JREUtils.setLdLibraryPath(ldPath)
+        AppLog.write("Environment set. LD_LIBRARY_PATH: $ldPath")
 
         onStatus("Starting Java ${spec.majorVersion} and Minecraft $versionId...")
         Thread(null, {
             try {
+                AppLog.write("JVM thread started")
+                NativeBridge.installCrashLog(AppLog.path())
+                AppLog.write("Native crash catcher installed")
+
                 val javaArgsPtr = JavaRunner.nativeTransferArguments(javaArgs.toTypedArray())
+                AppLog.write("JVM arguments transferred (${javaArgs.size} items)")
                 val appArgsPtr = JavaRunner.nativeTransferArguments(gameArgs.toTypedArray())
+                AppLog.write("Game arguments transferred (${gameArgs.size} items)")
+
+                AppLog.write("Calling nativeLoadJVM for $mainClass")
                 val ok = JavaRunner.nativeLoadJVM(vmPath.absolutePath, javaArgsPtr, mainClass, appArgsPtr, false)
+                AppLog.write("nativeLoadJVM returned $ok")
                 onStatus(if (ok) "Minecraft exited." else "Minecraft did not start.")
             } catch (e: Throwable) {
+                AppLog.write("JVM thread error: ${e.message ?: e.javaClass.simpleName}")
                 onStatus("Launch failed: ${e.message ?: e.javaClass.simpleName}")
             }
         }, "minecraft-jvm", 64L * 1024 * 1024).start()
