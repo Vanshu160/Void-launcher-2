@@ -81,7 +81,10 @@ class DownloadsViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    /** First launch test. Every step is written to the launch log. */
+    /**
+     * Starts the game. The button stays busy until Minecraft exits, because the JVM can only
+     * be started once per app process.
+     */
     fun startGame() {
         val id = _uiState.value.selectedId ?: return
         if (_uiState.value.isLaunching || _uiState.value.isDownloading) return
@@ -93,15 +96,23 @@ class DownloadsViewModel(application: Application) : AndroidViewModel(applicatio
                 try {
                     launcher.launch(id) { status ->
                         AppLog.write(status)
-                        _uiState.update { it.copy(message = status) }
+                        val finished = status == "Minecraft exited." ||
+                            status.startsWith("Minecraft did not start") ||
+                            status.startsWith("Launch failed")
+                        _uiState.update {
+                            it.copy(
+                                message = status,
+                                isLaunching = !finished,
+                                isError = status.startsWith("Minecraft did not start") ||
+                                    status.startsWith("Launch failed"),
+                            )
+                        }
                     }
                 } catch (e: Throwable) {
                     AppLog.write("Launch error: ${e.message ?: e.javaClass.simpleName}\n${e.stackTraceToString()}")
                     _uiState.update {
-                        it.copy(isError = true, message = e.message ?: e.javaClass.simpleName)
+                        it.copy(isLaunching = false, isError = true, message = e.message ?: e.javaClass.simpleName)
                     }
-                } finally {
-                    _uiState.update { it.copy(isLaunching = false) }
                 }
             }
         }
