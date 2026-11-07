@@ -8,6 +8,9 @@ import org.json.JSONObject
 
 object GameMetadataParser {
 
+    /** The CPU this launcher runs on. Only 64-bit ARM phones are supported for now. */
+    private const val DEVICE_ARCH = "arm64"
+
     /** Parses a version metadata JSON. Throws if the JSON is missing required fields. */
     fun parse(json: String): GameMetadata {
         val root = JSONObject(json)
@@ -80,7 +83,7 @@ object GameMetadataParser {
     /**
      * Mojang rules: the last rule that applies decides. A rule without an OS applies to every OS.
      * Rules gated by features (demo mode, custom resolution) never apply to a launcher install.
-     * Android is treated as "linux" here; the engine milestone re-checks this against real runs.
+     * Android is treated as "linux", and the CPU must match [DEVICE_ARCH] when a rule names one.
      */
     private fun isAllowed(rules: JSONArray?): Boolean {
         if (rules == null || rules.length() == 0) return true
@@ -91,8 +94,11 @@ object GameMetadataParser {
             val os = rule.optJSONObject("os")
             val applies = when {
                 os == null -> true
-                os.has("arch") -> false
-                else -> os.optString("name") == "linux"
+                else -> {
+                    val nameMatches = !os.has("name") || os.optString("name") == "linux"
+                    val archMatches = !os.has("arch") || os.optString("arch") == DEVICE_ARCH
+                    nameMatches && archMatches
+                }
             }
             if (applies) allowed = rule.getString("action") == "allow"
         }

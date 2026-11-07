@@ -115,6 +115,14 @@ class GameLauncher(private val context: Context) {
                 NativeBridge.installCrashLog(AppLog.path())
                 AppLog.write("Native crash catcher installed")
 
+                // Minecraft writes its logs to a relative folder, so start from the game folder.
+                try {
+                    val result = JREUtils.chdir(gameDir.absolutePath)
+                    AppLog.write("Working folder set to ${gameDir.absolutePath} (result $result)")
+                } catch (e: UnsatisfiedLinkError) {
+                    AppLog.write("Could not set working folder: ${e.message}")
+                }
+
                 val javaArgsPtr = JavaRunner.nativeTransferArguments(javaArgs.toTypedArray())
                 AppLog.write("JVM arguments transferred (${javaArgs.size} items)")
                 val appArgsPtr = JavaRunner.nativeTransferArguments(gameArgs.toTypedArray())

@@ -15,6 +15,7 @@ import java.util.Locale
  */
 object AppLog {
     private const val MAX_BYTES = 200_000
+    private const val IMPORT_LIMIT = 60_000
     private const val JVM_OUTPUT_NAME = "void-log.txt.jvm-out"
     private var file: File? = null
     private val time = SimpleDateFormat("HH:mm:ss", Locale.US)
@@ -62,7 +63,7 @@ object AppLog {
         val target = file ?: return
         dir.listFiles { f -> f.isFile && f.name.startsWith("jvm-error-") }?.forEach { report ->
             try {
-                val text = report.readText().take(60_000)
+                val text = report.readText().takeLast(IMPORT_LIMIT)
                 target.appendText("--- JVM crash report ${report.name} (from an earlier run) ---\n$text\n")
                 report.delete()
             } catch (e: Exception) {
@@ -77,9 +78,10 @@ object AppLog {
         val output = File(dir, JVM_OUTPUT_NAME)
         if (!output.isFile) return
         try {
-            val text = output.readText().take(60_000)
+            // The end of the output is kept: that is where the errors are.
+            val text = output.readText().takeLast(IMPORT_LIMIT)
             if (text.isNotBlank()) {
-                target.appendText("--- JVM console output (from the last launch) ---\n$text\n")
+                target.appendText("--- JVM console output (from the last launch, last part) ---\n$text\n")
             }
             output.delete()
         } catch (e: Exception) {
