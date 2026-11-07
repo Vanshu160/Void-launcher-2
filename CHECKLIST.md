@@ -1,14 +1,14 @@
 # Void Launcher development checklist
 
 ## Milestone 0.1.0 - Foundation
-- [x] GitHub repository created
-- [x] First commit pushed
-- [ ] Step 1: Gradle skeleton + bare Compose screen + CI build (files added, build not yet verified)
-- [ ] CI build passes and APK installs on a phone
-- [ ] Step 2: Theme (near-black, electric purple, blue)
-- [ ] Step 3: Navigation with placeholder screens
-- [ ] Step 4: Home screen with ViewModel
-- [ ] Step 7: Third-party notices file
+- [x] GitHub repository created and first commit pushed
+- [x] Step 1: Gradle skeleton, CI build passes, APK installs and runs
+- [ ] Step 2: Theme (near-black, electric purple, blue) - files added, build not yet verified
+- [ ] Step 3: Navigation with five placeholder screens - files added, build not yet verified
+- [ ] Step 4: Home screen with ViewModel - files added, build not yet verified
+- [ ] Step 5: GitHub Actions APK build (done with Step 1; re-verify each push)
+- [ ] Step 6: Verify on a phone
+- [ ] Step 7: Third-party notices file (THIRD_PARTY.md) - waits for Pojav code
 
 ## Later milestones
 - [ ] Version manager
