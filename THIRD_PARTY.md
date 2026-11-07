@@ -47,3 +47,10 @@ Check each library's own license before adding it.
 - **Pinned commit:** `b32a74357b1f064193beebfe1baa12c226568353`
 - **How it's used:** CMake fetches the pinned commit at build time and compiles only the JNI hook sources (`jvm_hooks/`, `jre_launcher/`, `utils.c`, `stdio_is.c`, `minibridge.c`). Nothing is copied into this repository.
 - **Note:** the LGPL notices in those source files stay in the fetched copy. Void Launcher is GPL-3.0, which is compatible with LGPL-3.0.
+
+## PojavLauncher fork (native hooks, built at compile time)
+- **Project:** PojavLauncher fork (https://github.com/Vanshu160/PojavLauncher), based on MojoLauncher's PojavLauncher
+- **License:** GNU Lesser General Public License v3.0 (LGPL-3.0), from the fork's LICENSE file
+- **Pinned commit:** `b32a74357b1f064193beebfe1baa12c226568353`
+- **How it's used:** CMake fetches the pinned commit at build time and compiles only the JNI hook sources (`jvm_hooks/`, `jre_launcher/`, `utils.c`, `stdio_is.c`, `minibridge.c`). Nothing is copied into this repository.
+- **Note:** the LGPL notices in those source files stay in the fetched copy. Void Launcher is GPL-3.0, which is compatible with LGPL-3.0.
