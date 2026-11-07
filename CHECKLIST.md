@@ -15,7 +15,7 @@
 - [x] Install with SHA-1 check and required dependencies (one level)
 - [x] Per-version mods folder, installed list, remove
 - [x] Selected version shared between Versions, Home and Mods
-- [ ] CI build passes
+- [x] CI build passes
 - [ ] Verified on a phone
 - [ ] Fabric loader install (needs the engine milestone)
 - [ ] Quilt, NeoForge, Forge
@@ -25,7 +25,7 @@
 - [x] Version metadata, client jar, libraries and assets downloaded with SHA-1 checks
 - [x] Existing valid files are skipped, so an interrupted download can resume
 - [x] Downloads screen with progress, cancel and error messages
-- [ ] CI build passes
+- [x] CI build passes
 - [ ] Verified on a phone
 - [ ] Native libraries extracted (engine milestone)
 
