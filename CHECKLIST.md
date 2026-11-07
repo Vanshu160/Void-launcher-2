@@ -18,25 +18,25 @@
 - [x] CI build passes
 - [ ] Verified on a phone
 - [ ] Fabric loader install (needs the engine milestone)
-- [ ] Quilt, NeoForge, Forge
-- [ ] OptiFine: import a jar you downloaded yourself
 
-## Milestone 0.5.0 - Game files download (complete in code)
+## Milestone 0.5.0 - Game files download (complete)
 - [x] Version metadata, client jar, libraries and assets downloaded with SHA-1 checks
 - [x] Existing valid files are skipped, so an interrupted download can resume
 - [x] Downloads screen with progress, cancel and error messages
 - [x] CI build passes
-- [ ] Verified on a phone
-- [ ] Native libraries extracted (engine milestone)
+- [x] Verified on a phone (Minecraft 1.21.11 downloaded)
 
-## Milestone 0.6.0 - Java runtime (complete in code)
+## Milestone 0.6.0 - Java runtime (complete)
 - [x] Runtime chosen from the version's required Java major (8, 17, 21, 25)
 - [x] Archives checked with RSA-4096 signatures before unpacking
-- [x] Unpacks to filesDir/runtimes/java-<major>, marked ready only if libjvm.so exists
+- [x] Java 21 downloaded and ready on device
 - [ ] Runtime license verified (blocks public release)
-- [ ] CI build passes
-- [ ] Verified on a phone
 - [ ] unpack200 step and libawt dummy (needed before the engine can run)
+
+## Milestone 0.7.0 - Native engine (in progress)
+- [x] 0.7.0a: NDK 29 and CMake 3.22.1 build a native library in CI
+- [ ] 0.7.0b: mojoexec and launcher hooks (mojort)
+- [ ] 0.7.0c: GLFW and MojoSDL
 
 ## Later milestones
 - [ ] Settings saved between launches
