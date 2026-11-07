@@ -8,6 +8,7 @@ import com.voidlauncher.app.data.VersionRepository
 import com.voidlauncher.app.data.download.GameDownloader
 import com.voidlauncher.app.data.launch.GameLauncher
 import com.voidlauncher.app.data.local.VersionCache
+import com.voidlauncher.app.data.log.AppLog
 import com.voidlauncher.app.data.remote.GameMetadataParser
 import com.voidlauncher.app.data.runtime.JavaRuntimeManager
 import kotlinx.coroutines.CancellationException
@@ -72,6 +73,7 @@ class DownloadsViewModel(application: Application) : AndroidViewModel(applicatio
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                AppLog.write("Download failed: ${e.message}")
                 _uiState.update {
                     it.copy(isDownloading = false, isError = true, message = e.message ?: "Download failed.")
                 }
@@ -79,19 +81,22 @@ class DownloadsViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    /** First launch test. Starts the JVM and reports what happens. */
+    /** First launch test. Every step is written to the launch log. */
     fun startGame() {
         val id = _uiState.value.selectedId ?: return
         if (_uiState.value.isLaunching || _uiState.value.isDownloading) return
 
+        AppLog.write("Start game tapped for $id")
         _uiState.update { it.copy(isLaunching = true, isError = false, message = "Preparing launch...") }
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 try {
                     launcher.launch(id) { status ->
+                        AppLog.write(status)
                         _uiState.update { it.copy(message = status) }
                     }
                 } catch (e: Throwable) {
+                    AppLog.write("Launch error: ${e.message ?: e.javaClass.simpleName}\n${e.stackTraceToString()}")
                     _uiState.update {
                         it.copy(isError = true, message = e.message ?: e.javaClass.simpleName)
                     }

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
@@ -13,10 +14,15 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.voidlauncher.app.data.log.AppLog
 import com.voidlauncher.app.ui.components.VoidCard
 
 @Composable
@@ -24,6 +30,8 @@ fun DownloadsScreen(viewModel: DownloadsViewModel = viewModel()) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val colors = MaterialTheme.colorScheme
     val selected = state.selectedId
+    var refresh by remember { mutableIntStateOf(0) }
+    val logText = remember(state.message, state.isLaunching, refresh) { AppLog.read() }
 
     Column(
         modifier = Modifier
@@ -97,6 +105,30 @@ fun DownloadsScreen(viewModel: DownloadsViewModel = viewModel()) {
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (state.isError) colors.error else colors.primary,
                 )
+            }
+        }
+
+        VoidCard {
+            Text(
+                text = "Launch log (long-press to copy)",
+                style = MaterialTheme.typography.titleMedium,
+                color = colors.onSurface,
+            )
+            SelectionContainer {
+                Text(
+                    text = logText.ifEmpty { "No log yet. Tap Start game to create one." },
+                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                    color = colors.onSurface,
+                )
+            }
+            OutlinedButton(
+                onClick = {
+                    AppLog.clear()
+                    refresh++
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Clear log")
             }
         }
     }
