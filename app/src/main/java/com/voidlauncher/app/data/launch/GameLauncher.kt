@@ -1,6 +1,7 @@
 package com.voidlauncher.app.data.launch
 
 import android.content.Context
+import android.os.Build
 import android.system.Os
 import com.voidlauncher.app.NativeBridge
 import com.voidlauncher.app.data.log.AppLog
@@ -13,8 +14,8 @@ import org.json.JSONObject
 import java.io.File
 
 /**
- * Starts Minecraft the same way PojavLauncher's JavaRunner.startJvm does, with the steps
- * needed for a first launch. The JVM runs on its own thread because it does not return.
+ * Starts Minecraft the same way PojavLauncher's JavaRunner.startJvm and GameRunner do.
+ * The JVM runs on its own thread because it does not return.
  */
 class GameLauncher(private val context: Context) {
 
@@ -27,16 +28,6 @@ class GameLauncher(private val context: Context) {
         System.loadLibrary("mojoexec")
         System.loadLibrary("mojort")
         AppLog.write("Native bridge: ${NativeBridge.nativeVersion()}")
-    }
-
-    /** The LWJGL version the game asks for, read from its metadata. Null if it is not listed. */
-    private fun lwjglVersion(json: JSONObject): String? {
-        val libraries = json.optJSONArray("libraries") ?: return null
-        for (i in 0 until libraries.length()) {
-            val name = libraries.getJSONObject(i).optString("name")
-            if (name.startsWith("org.lwjgl:lwjgl:")) return name.removePrefix("org.lwjgl:lwjgl:")
-        }
-        return null
     }
 
     /** Starts the game. Returns after starting the JVM thread. Progress goes to [onStatus]. */
@@ -52,30 +43,45 @@ class GameLauncher(private val context: Context) {
         val vmPath = runtimeHome.walkTopDown().firstOrNull { it.isFile && it.name == "libjvm.so" }
             ?: error("libjvm.so was not found in the Java runtime.")
         AppLog.write("libjvm.so: ${vmPath.absolutePath}")
-        AppLog.write("LWJGL version in this game: ${lwjglVersion(json) ?: "not listed"}")
 
         gameDir.mkdirs()
-        onStatus("Fetching ARM graphics libraries...")
-        val armJars = ArmNatives.ensure(minecraftRoot) { AppLog.write(it) }
-        AppLog.write("ARM graphics libraries on the classpath: ${armJars.size} of 4")
-
         val classFiles = listOf(File(minecraftRoot, metadata.client.relativePath)) +
-            metadata.libraries.map { File(minecraftRoot, it.relativePath) } +
-            armJars
+            metadata.libraries.map { File(minecraftRoot, it.relativePath) }
         val classpath = classFiles.joinToString(":") { it.absolutePath }
         AppLog.write("Classpath entries: ${classFiles.size}")
 
+        val nativeDir = File(context.applicationInfo.nativeLibraryDir)
+        val lwjglExtractDir = File(context.cacheDir, "lwjgl_native/$versionId").apply { mkdirs() }
+
+        // Same properties as PojavLauncher (JavaRunner.getJavaArgs and GameRunner).
         val javaArgs = mutableListOf(
             "-Xms512M",
             "-Xmx${ramMb}M",
             "-Djava.home=${runtimeHome.absolutePath}",
             "-Djava.io.tmpdir=${context.cacheDir.absolutePath}",
+            "-Djava.library.path=${nativeDir.absolutePath}",
+            "-Djna.boot.library.path=${nativeDir.absolutePath}",
             "-Duser.home=${gameDir.absolutePath}",
+            "-Duser.language=en",
+            "-Duser.country=US",
+            "-Dos.name=Linux",
+            "-Dos.version=Android-${Build.VERSION.RELEASE}",
             "-Dpojav.path.minecraft=${minecraftRoot.absolutePath}",
+            "-Dorg.lwjgl.vulkan.libname=libvulkan.so",
+            "-Dorg.lwjgl.spvc.libname=spirv-cross-c-shared",
+            "-Dorg.lwjgl.sdl.libname=${File(nativeDir, "libSDL3.so").absolutePath}",
             "-Dorg.lwjgl.system.allocator=system",
+            "-Dorg.lwjgl.system.SharedLibraryExtractPath=${lwjglExtractDir.absolutePath}",
+            // Default process launching does not work on Android.
+            "-Djdk.lang.Process.launchMechanism=FORK",
             "-Djava.class.path=$classpath",
             // If the JVM itself crashes, it writes its report here. The app copies it into the log on next start.
             "-XX:ErrorFile=${File(context.filesDir, "jvm-error-%p.log").absolutePath}",
+        )
+        AppLog.write(
+            "JVM properties: " + javaArgs
+                .filterNot { it.startsWith("-Djava.class.path") }
+                .joinToString(" | ")
         )
 
         val values = mapOf(
@@ -113,7 +119,7 @@ class GameLauncher(private val context: Context) {
         val libsDir = checkNotNull(vmPath.parentFile?.parentFile)
         val ldPath = listOf(
             libsDir,
-            File(context.applicationInfo.nativeLibraryDir),
+            nativeDir,
             vmPath.parentFile,
             File(libsDir, "jli"),
         ).joinToString(":") { it.absolutePath }
