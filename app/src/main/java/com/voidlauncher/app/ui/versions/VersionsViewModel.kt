@@ -55,4 +55,8 @@ class VersionsViewModel(application: Application) : AndroidViewModel(application
     fun setFilter(filter: VersionFilter) {
         _uiState.update { it.copy(filter = filter) }
     }
+
+    fun select(id: String) {
+        _uiState.update { it.copy(selectedId = id) }
+    }
 }

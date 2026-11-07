@@ -6,6 +6,7 @@ import com.voidlauncher.app.domain.model.VersionFilter
 data class VersionsUiState(
     val versions: List<MinecraftVersion> = emptyList(),
     val filter: VersionFilter = VersionFilter.ALL,
+    val selectedId: String? = null,
     val isLoading: Boolean = false,
     val fromCache: Boolean = false,
     val errorMessage: String? = null,
