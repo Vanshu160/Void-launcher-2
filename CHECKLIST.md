@@ -3,15 +3,21 @@
 ## Milestone 0.1.0 - Foundation
 - [x] GitHub repository created and first commit pushed
 - [x] Step 1: Gradle skeleton, CI build passes, APK installs and runs
-- [ ] Step 2: Theme (near-black, electric purple, blue) - files added, build not yet verified
-- [ ] Step 3: Navigation with five placeholder screens - files added, build not yet verified
-- [ ] Step 4: Home screen with ViewModel - files added, build not yet verified
-- [ ] Step 5: GitHub Actions APK build (done with Step 1; re-verify each push)
-- [ ] Step 6: Verify on a phone
-- [ ] Step 7: Third-party notices file (THIRD_PARTY.md) - waits for Pojav code
+- [x] Step 2: Theme (near-black, electric purple, blue)
+- [x] Step 3: Navigation with five screens (Home, Versions, Downloads, Settings, Logs)
+- [x] Step 4: Home screen with ViewModel (Play disabled until a version exists)
+- [x] Step 5: GitHub Actions builds a debug APK on every push
+- [x] Step 6: Verified on a phone
+- [x] License: GPL-3.0 (`LICENSE`)
+- [x] Step 7: Third-party notices (`THIRD_PARTY.md`)
+
+## Milestone 0.2.0 - Version manager (next)
+- [ ] Data layer: fetch the Minecraft version list
+- [ ] Local storage of the version list
+- [ ] Versions screen shows real data
+- [ ] Animations and layout polish
 
 ## Later milestones
-- [ ] Version manager
 - [ ] Downloads
 - [ ] Settings (RAM and resolution)
 - [ ] Microsoft login
