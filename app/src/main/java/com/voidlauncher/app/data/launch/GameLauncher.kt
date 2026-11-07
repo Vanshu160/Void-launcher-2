@@ -29,6 +29,16 @@ class GameLauncher(private val context: Context) {
         AppLog.write("Native bridge: ${NativeBridge.nativeVersion()}")
     }
 
+    /** The LWJGL version the game asks for, read from its metadata. Null if it is not listed. */
+    private fun lwjglVersion(json: JSONObject): String? {
+        val libraries = json.optJSONArray("libraries") ?: return null
+        for (i in 0 until libraries.length()) {
+            val name = libraries.getJSONObject(i).optString("name")
+            if (name.startsWith("org.lwjgl:lwjgl:")) return name.removePrefix("org.lwjgl:lwjgl:")
+        }
+        return null
+    }
+
     /** Starts the game. Returns after starting the JVM thread. Progress goes to [onStatus]. */
     fun launch(versionId: String, ramMb: Int = 2048, onStatus: (String) -> Unit) {
         val metaFile = File(minecraftRoot, "versions/$versionId/$versionId.json")
@@ -42,12 +52,18 @@ class GameLauncher(private val context: Context) {
         val vmPath = runtimeHome.walkTopDown().firstOrNull { it.isFile && it.name == "libjvm.so" }
             ?: error("libjvm.so was not found in the Java runtime.")
         AppLog.write("libjvm.so: ${vmPath.absolutePath}")
+        AppLog.write("LWJGL version in this game: ${lwjglVersion(json) ?: "not listed"}")
 
         gameDir.mkdirs()
-        val classpath = (listOf(File(minecraftRoot, metadata.client.relativePath)) +
-            metadata.libraries.map { File(minecraftRoot, it.relativePath) })
-            .joinToString(":") { it.absolutePath }
-        AppLog.write("Classpath entries: ${classpath.split(":").size}")
+        onStatus("Fetching ARM graphics libraries...")
+        val armJars = ArmNatives.ensure(minecraftRoot) { AppLog.write(it) }
+        AppLog.write("ARM graphics libraries on the classpath: ${armJars.size} of 4")
+
+        val classFiles = listOf(File(minecraftRoot, metadata.client.relativePath)) +
+            metadata.libraries.map { File(minecraftRoot, it.relativePath) } +
+            armJars
+        val classpath = classFiles.joinToString(":") { it.absolutePath }
+        AppLog.write("Classpath entries: ${classFiles.size}")
 
         val javaArgs = mutableListOf(
             "-Xms512M",
