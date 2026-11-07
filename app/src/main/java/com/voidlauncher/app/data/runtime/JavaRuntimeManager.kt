@@ -130,7 +130,7 @@ class JavaRuntimeManager(private val context: Context) {
                 var entry: TarArchiveEntry? = tar.nextEntry
                 while (entry != null) {
                     val target = File(dest, entry.name)
-                    if (!target.canonicalPath.startsWith(destRoot)) {
+                    if (target.canonicalPath != dest.canonicalPath && !target.canonicalPath.startsWith(destRoot)) {
                         throw IOException("Unsafe path in runtime archive: ${entry.name}")
                     }
                     target.parentFile?.mkdirs()
