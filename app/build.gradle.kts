@@ -16,7 +16,8 @@ android {
         versionCode = 2
         versionName = "0.1.0"
         ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+            // 64-bit ARM only for now. Other CPUs are added after the engine works on a phone.
+            abiFilters += listOf("arm64-v8a")
         }
     }
 

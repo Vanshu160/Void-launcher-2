@@ -28,3 +28,8 @@ Check each library's own license before adding it.
 |---|---|---|
 | Apache Commons Compress 1.27.1 | Reads tar archives | Apache-2.0 |
 | XZ for Java 1.10 | Decompresses .xz archives | Public domain (per project) |
+
+## mojoexec (native, built at compile time)
+- **Project:** mojoexec, by MojoLauncher (https://github.com/MojoLauncher/mojoexec)
+- **License:** MIT, Copyright (c) 2026 Maksim Belov (full text in the upstream repository's LICENSE file)
+- **How it's used:** CMake fetches the pinned commit `9ec4b836e93900135bad823eaac16ebc81cf6b98` during the build. No mojoexec source is copied into this repository.

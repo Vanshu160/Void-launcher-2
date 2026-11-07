@@ -35,8 +35,9 @@
 
 ## Milestone 0.7.0 - Native engine (in progress)
 - [x] 0.7.0a: NDK 29 and CMake 3.22.1 build a native library in CI
-- [ ] 0.7.0b: mojoexec and launcher hooks (mojort)
-- [ ] 0.7.0c: GLFW and MojoSDL
+- [ ] 0.7.0b: mojoexec built from a pinned commit (CI check pending)
+- [ ] 0.7.0c: launcher hooks (mojort) and GLFW
+- [ ] 0.7.0d: MojoSDL
 
 ## Later milestones
 - [ ] Settings saved between launches
