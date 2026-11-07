@@ -1,21 +1,19 @@
 # Void Launcher development checklist
 
-## Milestone 0.1.0 - Foundation
-- [x] GitHub repository created and first commit pushed
-- [x] Step 1: Gradle skeleton, CI build passes, APK installs and runs
-- [x] Step 2: Theme (near-black, electric purple, blue)
-- [x] Step 3: Navigation with five screens (Home, Versions, Downloads, Settings, Logs)
-- [x] Step 4: Home screen with ViewModel (Play disabled until a version exists)
-- [x] Step 5: GitHub Actions builds a debug APK on every push
-- [x] Step 6: Verified on a phone
-- [x] License: GPL-3.0 (`LICENSE`)
-- [x] Step 7: Third-party notices (`THIRD_PARTY.md`)
+## Milestone 0.1.0 - Foundation (complete)
+- [x] GitHub repository, Gradle skeleton, CI APK build
+- [x] Theme, navigation with five screens, Home screen
+- [x] Verified on a phone
+- [x] License: GPL-3.0 (`LICENSE`) and third-party notices (`THIRD_PARTY.md`)
 
-## Milestone 0.2.0 - Version manager (next)
-- [ ] Data layer: fetch the Minecraft version list
-- [ ] Local storage of the version list
-- [ ] Versions screen shows real data
-- [ ] Animations and layout polish
+## Milestone 0.2.0 - Version manager
+- [x] INTERNET permission added
+- [x] Fetch Mojang's official version manifest
+- [x] Save the list on the phone for offline use
+- [x] Versions screen shows release and snapshot versions
+- [x] Filters: All, Release, Snapshot
+- [ ] CI build passes
+- [ ] Verified on a phone (online and offline)
 
 ## Later milestones
 - [ ] Downloads
