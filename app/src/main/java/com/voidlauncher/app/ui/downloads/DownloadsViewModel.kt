@@ -7,6 +7,8 @@ import com.voidlauncher.app.data.SelectedVersion
 import com.voidlauncher.app.data.VersionRepository
 import com.voidlauncher.app.data.download.GameDownloader
 import com.voidlauncher.app.data.local.VersionCache
+import com.voidlauncher.app.data.remote.GameMetadataParser
+import com.voidlauncher.app.data.runtime.JavaRuntimeManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,7 +20,9 @@ import java.io.File
 
 class DownloadsViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val downloader = GameDownloader(File(application.filesDir, "minecraft"))
+    private val minecraftRoot = File(application.filesDir, "minecraft")
+    private val downloader = GameDownloader(minecraftRoot)
+    private val runtimes = JavaRuntimeManager(application)
     private val versions = VersionRepository(VersionCache(application))
 
     private val _uiState = MutableStateFlow(DownloadsUiState(selectedId = SelectedVersion.flow.value))
@@ -44,10 +48,25 @@ class DownloadsViewModel(application: Application) : AndroidViewModel(applicatio
                 val version = versions.loadCached()?.firstOrNull { it.id == id }
                     ?: throw IllegalStateException("Open the Versions tab first so the version list is saved.")
 
+                // 1. Game files (metadata, client, libraries, assets).
                 downloader.download(version) { progress ->
                     _uiState.update { it.copy(progress = progress) }
                 }
-                _uiState.update { it.copy(isDownloading = false, message = "Minecraft $id is ready on this device.") }
+
+                // 2. The Java runtime this version needs.
+                val metadata = GameMetadataParser.parse(
+                    File(minecraftRoot, "versions/$id/$id.json").readText(),
+                )
+                runtimes.install(metadata.javaMajorVersion) { stage ->
+                    _uiState.update { it.copy(progress = null, message = stage, isError = false) }
+                }
+
+                _uiState.update {
+                    it.copy(
+                        isDownloading = false,
+                        message = "Minecraft $id and Java ${metadata.javaMajorVersion} are ready on this device.",
+                    )
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

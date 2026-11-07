@@ -21,7 +21,7 @@
 - [ ] Quilt, NeoForge, Forge
 - [ ] OptiFine: import a jar you downloaded yourself
 
-## Milestone 0.5.0 - Game files download (in progress)
+## Milestone 0.5.0 - Game files download (complete in code)
 - [x] Version metadata, client jar, libraries and assets downloaded with SHA-1 checks
 - [x] Existing valid files are skipped, so an interrupted download can resume
 - [x] Downloads screen with progress, cancel and error messages
@@ -29,8 +29,16 @@
 - [ ] Verified on a phone
 - [ ] Native libraries extracted (engine milestone)
 
+## Milestone 0.6.0 - Java runtime (complete in code)
+- [x] Runtime chosen from the version's required Java major (8, 17, 21, 25)
+- [x] Archives checked with RSA-4096 signatures before unpacking
+- [x] Unpacks to filesDir/runtimes/java-<major>, marked ready only if libjvm.so exists
+- [ ] Runtime license verified (blocks public release)
+- [ ] CI build passes
+- [ ] Verified on a phone
+- [ ] unpack200 step and libawt dummy (needed before the engine can run)
+
 ## Later milestones
-- [ ] Java runtime management (Java major version is already read from metadata)
 - [ ] Settings saved between launches
 - [ ] Microsoft login
 - [ ] Engine API contracts

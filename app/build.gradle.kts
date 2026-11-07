@@ -44,5 +44,9 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.navigation.compose)
 
+    // Java runtime archives are tar.xz files.
+    implementation(libs.commons.compress)
+    implementation(libs.xz)
+
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
