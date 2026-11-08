@@ -73,3 +73,14 @@ Check each library's own license before adding it.
 
 ## mojoexec pin update
 - The mojoexec pin used by the native build is now `27790c525c3f572d9611bfa05c532014be367ca0` (the commit the PojavLauncher fork uses). It replaces `9ec4b836e93900135bad823eaac16ebc81cf6b98`. The only difference is one line in `affinity.c`.
+
+## libjnidispatch.so (JNA native dispatch library, Android build)
+- **Source:** PojavLauncher fork, pinned commit `b32a74357b1f064193beebfe1baa12c226568353`, path `app_pojavlauncher/src/main/jniLibs/arm64-v8a/libjnidispatch.so`
+- **Upstream project:** JNA (https://github.com/java-native-access/jna), dual licensed Apache-2.0 / LGPL-2.1
+- **Why:** the JNA jar on the game's classpath tries to extract its own desktop-Linux build of this library, which needs glibc's `libc.so.6` and fails on Android's bionic libc. This is a build of the same native code against the Android NDK, matching JNA's JNI entry points, used by PojavLauncher in production.
+
+## LWJGL 3.3.3 native libraries (arm64 Android), built in this repo's own CI
+- **Source:** PojavLauncherTeam/lwjgl3 (https://github.com/PojavLauncherTeam/lwjgl3), branch `wip/rebase_3.3.3`
+- **License:** BSD 3-Clause (same as upstream LWJGL)
+- **How it's built:** `.github/workflows/build-lwjgl-arm64.yml` runs that project's own `ci_build_android.bash` for arm64 and publishes the resulting `.so` files as a GitHub Release (`lwjgl-3.3.3-arm64`) in this repository. The app downloads them at first launch (`Lwjgl333Natives.kt`), the same per-version natives folder pattern PojavLauncher's own `GameRunner` uses.
+- **Status:** this is a real native compile of third-party, in-progress (unreleased) upstream code. It needs to be run and verified in GitHub Actions before it produces anything; see CHECKLIST.md.

@@ -30,6 +30,16 @@ class GameLauncher(private val context: Context) {
         AppLog.write("Native bridge: ${NativeBridge.nativeVersion()}")
     }
 
+    /** The LWJGL version the game asks for, read from its metadata. Null if it is not listed. */
+    private fun lwjglVersion(json: JSONObject): String? {
+        val libraries = json.optJSONArray("libraries") ?: return null
+        for (i in 0 until libraries.length()) {
+            val name = libraries.getJSONObject(i).optString("name")
+            if (name.startsWith("org.lwjgl:lwjgl:")) return name.removePrefix("org.lwjgl:lwjgl:")
+        }
+        return null
+    }
+
     /** Starts the game. Returns after starting the JVM thread. Progress goes to [onStatus]. */
     fun launch(versionId: String, ramMb: Int = 2048, onStatus: (String) -> Unit) {
         val metaFile = File(minecraftRoot, "versions/$versionId/$versionId.json")
@@ -43,8 +53,12 @@ class GameLauncher(private val context: Context) {
         val vmPath = runtimeHome.walkTopDown().firstOrNull { it.isFile && it.name == "libjvm.so" }
             ?: error("libjvm.so was not found in the Java runtime.")
         AppLog.write("libjvm.so: ${vmPath.absolutePath}")
+        AppLog.write("LWJGL version in this game: ${lwjglVersion(json) ?: "not listed"}")
 
         gameDir.mkdirs()
+        onStatus("Checking LWJGL arm64 natives...")
+        val lwjglNativesDir = Lwjgl333Natives.ensure(minecraftRoot) { AppLog.write(it) }
+
         val classFiles = listOf(File(minecraftRoot, metadata.client.relativePath)) +
             metadata.libraries.map { File(minecraftRoot, it.relativePath) }
         val classpath = classFiles.joinToString(":") { it.absolutePath }
@@ -53,14 +67,16 @@ class GameLauncher(private val context: Context) {
         val nativeDir = File(context.applicationInfo.nativeLibraryDir)
         val lwjglExtractDir = File(context.cacheDir, "lwjgl_native/$versionId").apply { mkdirs() }
 
-        // Same properties as PojavLauncher (JavaRunner.getJavaArgs and GameRunner).
+        // Same property names as PojavLauncher (JavaRunner.getJavaArgs and GameRunner), including the
+        // per-version natives directory pattern GameRunner uses for libraries not bundled in the APK.
+        val libraryPathDirs = listOfNotNull(lwjglNativesDir, nativeDir).joinToString(":") { it.absolutePath }
         val javaArgs = mutableListOf(
             "-Xms512M",
             "-Xmx${ramMb}M",
             "-Djava.home=${runtimeHome.absolutePath}",
             "-Djava.io.tmpdir=${context.cacheDir.absolutePath}",
-            "-Djava.library.path=${nativeDir.absolutePath}",
-            "-Djna.boot.library.path=${nativeDir.absolutePath}",
+            "-Djava.library.path=$libraryPathDirs",
+            "-Djna.boot.library.path=$libraryPathDirs",
             "-Duser.home=${gameDir.absolutePath}",
             "-Duser.language=en",
             "-Duser.country=US",
@@ -72,6 +88,9 @@ class GameLauncher(private val context: Context) {
             "-Dorg.lwjgl.sdl.libname=${File(nativeDir, "libSDL3.so").absolutePath}",
             "-Dorg.lwjgl.system.allocator=system",
             "-Dorg.lwjgl.system.SharedLibraryExtractPath=${lwjglExtractDir.absolutePath}",
+        ).apply {
+            if (lwjglNativesDir != null) add("-Dorg.lwjgl.librarypath=${lwjglNativesDir.absolutePath}")
+        } + listOf(
             // Default process launching does not work on Android.
             "-Djdk.lang.Process.launchMechanism=FORK",
             "-Djava.class.path=$classpath",
@@ -122,7 +141,8 @@ class GameLauncher(private val context: Context) {
             nativeDir,
             vmPath.parentFile,
             File(libsDir, "jli"),
-        ).joinToString(":") { it.absolutePath }
+        ).let { base -> if (lwjglNativesDir != null) listOf(lwjglNativesDir) + base else base }
+            .joinToString(":") { it.absolutePath }
         Os.setenv("JAVA_HOME", runtimeHome.absolutePath, true)
         Os.setenv("HOME", gameDir.absolutePath, true)
         Os.setenv("TMPDIR", context.cacheDir.absolutePath, true)

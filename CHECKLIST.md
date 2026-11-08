@@ -60,3 +60,14 @@
 - [x] mojoexec pin matched to the fork (`27790c5`)
 - [ ] CI build passes (arm64 `libglfw.so` and `libSDL3.so` built, not linked yet)
 - [ ] Java bridge classes (`git.artdeell.dnbootstrap.glfw`, `git.mojo.sdl`) added, next step
+
+## Root-cause fixes for the first launch crash (in progress)
+- [x] Identified: LWJGL finds only Mojang's x64 natives jar on the classpath; no arm64 LWJGL 3.3.3 natives exist anywhere yet
+- [x] Identified: JNA's bundled libjnidispatch.so needs glibc (`libc.so.6`), which Android does not have
+- [x] JNA fix: PojavLauncher's own Android-built libjnidispatch.so (arm64) added to jniLibs
+- [x] New CI workflow added: builds real LWJGL 3.3.3 arm64 natives from PojavLauncherTeam/lwjgl3 (wip/rebase_3.3.3), publishes them as a release in this repo
+- [ ] That workflow run has succeeded (must be checked in GitHub Actions; this build is non-trivial and may need iteration)
+- [ ] GameLauncher downloads and wires in the built LWJGL natives (code written; depends on the workflow succeeding)
+- [ ] Tested on a phone: LWJGL loads without the platform-mismatch warning
+- [ ] Tested on a phone: JNA/oshi initialize without the libc.so.6 error
+- [ ] Tested on a phone: GLFW opens an on-screen window

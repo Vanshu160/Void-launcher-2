@@ -1,0 +1,74 @@
+name: Build LWJGL 3.3.3 (arm64, from PojavLauncherTeam's own Android build)
+
+# Manual, because this is a slow native compile (libffi + FreeType + LWJGL's C modules) and is
+# only needed again if we change the LWJGL version or the upstream build changes.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    env:
+      ANDROID: "1"
+      LWJGL_BUILD_OFFLINE: "1"
+      LWJGL_BUILD_ARCH: arm64
+      SKIP_LIBFFI: "0"
+      SKIP_FREETYPE: "0"
+    steps:
+      - name: Checkout PojavLauncherTeam/lwjgl3 (wip/rebase_3.3.3, their own working Android build)
+        uses: actions/checkout@v6
+        with:
+          repository: PojavLauncherTeam/lwjgl3
+          ref: wip/rebase_3.3.3
+          path: lwjgl3
+
+      - name: Set up JDK 8 (the build's own Ant script requires it)
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 8
+
+      - name: Set up Android NDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install the exact NDK version this project uses
+        run: echo "y" | sdkmanager --install "ndk;29.0.14206865"
+
+      - name: Install Ant
+        run: sudo apt-get update && sudo apt-get install -y ant
+
+      - name: Run PojavLauncherTeam's own Android build script for arm64
+        working-directory: lwjgl3
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_SDK_ROOT }}/ndk/29.0.14206865
+        run: bash ci_build_android.bash
+
+      - name: Collect the built native libraries
+        run: |
+          mkdir -p out
+          cp lwjgl3/bin/out/*.so out/ 2>/dev/null || true
+          ls -la out
+
+      - name: Upload as a build artifact (always, so a failed release step still leaves this)
+        uses: actions/upload-artifact@v7
+        with:
+          name: lwjgl-3.3.3-arm64-natives
+          path: out/*.so
+          if-no-files-found: error
+
+      - name: Publish as a GitHub Release in this repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="lwjgl-3.3.3-arm64"
+          gh release delete "$TAG" --yes 2>/dev/null || true
+          git tag -f "$TAG"
+          git push -f origin "$TAG"
+          gh release create "$TAG" out/*.so \
+            --title "LWJGL 3.3.3 native libraries (arm64 Android)" \
+            --notes "Built from PojavLauncherTeam/lwjgl3 at wip/rebase_3.3.3 using their own ci_build_android.bash, for arm64 (aarch64-linux-android) only. These are the real LWJGL 3.3.3 natives for Android, not a substitute version." \
+            --prerelease
