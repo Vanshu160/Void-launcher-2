@@ -84,3 +84,18 @@ Check each library's own license before adding it.
 - **License:** BSD 3-Clause (same as upstream LWJGL)
 - **How it's built:** `.github/workflows/build-lwjgl-arm64.yml` runs that project's own `ci_build_android.bash` for arm64 and publishes the resulting `.so` files as a GitHub Release (`lwjgl-3.3.3-arm64`) in this repository. The app downloads them at first launch (`Lwjgl333Natives.kt`), the same per-version natives folder pattern PojavLauncher's own `GameRunner` uses.
 - **Status:** this is a real native compile of third-party, in-progress (unreleased) upstream code. It needs to be run and verified in GitHub Actions before it produces anything; see CHECKLIST.md.
+
+## JNA native dispatch library (per game version, downloaded from Maven Central)
+- **Source:** the JNA project's own official Android build, published alongside the regular jar as
+  `net/java/dev/jna/jna/<version>/jna-<version>.aar` on Maven Central (not a third-party rebuild).
+- **License:** JNA is dual licensed Apache-2.0 / LGPL-2.1 (https://github.com/java-native-access/jna)
+- **How it's used:** `JnaNatives.kt` downloads the .aar for the JNA version the running game's
+  metadata requests, verifies its SHA1 against a short pinned list, and extracts
+  `jni/arm64-v8a/libjnidispatch.so` into a per-version natives folder - the exact approach
+  PojavLauncher's own `tasks/NativesExtractor.java` and `tasks/MoJsonDownloader.java` use
+  (TeamPojavLauncher/PojavLauncher, confirmed by reading that source directly).
+- **Why not keep using the static jniLibs copy:** JNA discards a native dispatch library whose
+  compiled-in version does not match its own jar, so a single static copy only works for the one
+  JNA version it was built against. PojavLauncher's own source documents this copy as a fallback
+  that "may be too old" and always prefers a version-matched download when the game needs JNA
+  5.13.0 or newer (our games need 5.17.0).

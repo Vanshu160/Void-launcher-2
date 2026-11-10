@@ -64,7 +64,7 @@
 ## Root-cause fixes for the first launch crash (in progress)
 - [x] Identified: LWJGL finds only Mojang's x64 natives jar on the classpath; no arm64 LWJGL 3.3.3 natives exist anywhere yet
 - [x] Identified: JNA's bundled libjnidispatch.so needs glibc (`libc.so.6`), which Android does not have
-- [x] JNA fix: PojavLauncher's own Android-built libjnidispatch.so (arm64) added to jniLibs
+- [x] JNA fix (corrected): the static jniLibs/arm64-v8a/libjnidispatch.so copy was confirmed insufficient (PojavLauncher itself treats it as a fallback only). Real fix: download JNA's own official Android .aar from Maven Central for the exact version the game requests, and extract a matching libjnidispatch.so per game version (JnaNatives.kt), same pattern as the LWJGL natives.
 - [x] New CI workflow added: builds real LWJGL 3.3.3 arm64 natives from PojavLauncherTeam/lwjgl3 (wip/rebase_3.3.3), publishes them as a release in this repo
 - [ ] That workflow run has succeeded (must be checked in GitHub Actions; this build is non-trivial and may need iteration)
 - [ ] GameLauncher downloads and wires in the built LWJGL natives (code written; depends on the workflow succeeding)

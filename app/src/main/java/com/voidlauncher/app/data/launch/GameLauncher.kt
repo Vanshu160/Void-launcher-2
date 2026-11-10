@@ -40,6 +40,16 @@ class GameLauncher(private val context: Context) {
         return null
     }
 
+    /** The JNA version the game asks for, read from its metadata. Null if it is not listed. */
+    private fun jnaVersion(json: JSONObject): String? {
+        val libraries = json.optJSONArray("libraries") ?: return null
+        for (i in 0 until libraries.length()) {
+            val name = libraries.getJSONObject(i).optString("name")
+            if (name.startsWith("net.java.dev.jna:jna:")) return name.removePrefix("net.java.dev.jna:jna:")
+        }
+        return null
+    }
+
     /** Starts the game. Returns after starting the JVM thread. Progress goes to [onStatus]. */
     fun launch(versionId: String, ramMb: Int = 2048, onStatus: (String) -> Unit) {
         val metaFile = File(minecraftRoot, "versions/$versionId/$versionId.json")
@@ -54,10 +64,12 @@ class GameLauncher(private val context: Context) {
             ?: error("libjvm.so was not found in the Java runtime.")
         AppLog.write("libjvm.so: ${vmPath.absolutePath}")
         AppLog.write("LWJGL version in this game: ${lwjglVersion(json) ?: "not listed"}")
+        AppLog.write("JNA version in this game: ${jnaVersion(json) ?: "not listed"}")
 
         gameDir.mkdirs()
         onStatus("Checking LWJGL arm64 natives...")
         val lwjglNativesDir = Lwjgl333Natives.ensure(minecraftRoot) { AppLog.write(it) }
+        val jnaNativesDir = JnaNatives.ensure(minecraftRoot, jnaVersion(json)) { AppLog.write(it) }
 
         val classFiles = listOf(File(minecraftRoot, metadata.client.relativePath)) +
             metadata.libraries.map { File(minecraftRoot, it.relativePath) }
@@ -69,7 +81,7 @@ class GameLauncher(private val context: Context) {
 
         // Same property names as PojavLauncher (JavaRunner.getJavaArgs and GameRunner), including the
         // per-version natives directory pattern GameRunner uses for libraries not bundled in the APK.
-        val libraryPathDirs = listOfNotNull(lwjglNativesDir, nativeDir).joinToString(":") { it.absolutePath }
+        val libraryPathDirs = listOfNotNull(jnaNativesDir, lwjglNativesDir, nativeDir).joinToString(":") { it.absolutePath }
         val javaArgs = mutableListOf(
             "-Xms512M",
             "-Xmx${ramMb}M",
@@ -141,7 +153,7 @@ class GameLauncher(private val context: Context) {
             nativeDir,
             vmPath.parentFile,
             File(libsDir, "jli"),
-        ).let { base -> if (lwjglNativesDir != null) listOf(lwjglNativesDir) + base else base }
+        ).let { base -> listOfNotNull(jnaNativesDir, lwjglNativesDir) + base }
             .joinToString(":") { it.absolutePath }
         Os.setenv("JAVA_HOME", runtimeHome.absolutePath, true)
         Os.setenv("HOME", gameDir.absolutePath, true)
