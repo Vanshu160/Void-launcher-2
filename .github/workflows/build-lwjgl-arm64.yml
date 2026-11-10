@@ -26,17 +26,25 @@ jobs:
           ref: wip/rebase_3.3.3
           path: lwjgl3
 
-      - name: Set up JDK 8 (the build's own Ant script requires it)
+      # The Android command-line tools need JDK 17+. Use 17 only for the SDK/NDK steps below.
+      - name: Set up JDK 17 (for the Android SDK tools)
         uses: actions/setup-java@v6
         with:
           distribution: temurin
-          java-version: 8
+          java-version: 17
 
       - name: Set up Android NDK
         uses: android-actions/setup-android@v3
 
       - name: Install the exact NDK version this project uses
         run: echo "y" | sdkmanager --install "ndk;29.0.14206865"
+
+      # Switch to JDK 8 for the build itself, after the SDK tools have run.
+      - name: Set up JDK 8 (the build's own Ant script requires it)
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 8
 
       - name: Install Ant
         run: sudo apt-get update && sudo apt-get install -y ant
@@ -60,15 +68,16 @@ jobs:
           path: out/*.so
           if-no-files-found: error
 
-      - name: Publish as a GitHub Release in this repository
+      # Never overwrites or deletes anything: a unique tag per run, created on this exact commit.
+      # The stable tag used by Lwjgl333Natives.kt is NOT touched here; promoting a build to it is a
+      # separate, explicit step after the phone test.
+      - name: Publish as a prerelease under a unique tag (no overwrite)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="lwjgl-3.3.3-arm64"
-          gh release delete "$TAG" --yes 2>/dev/null || true
-          git tag -f "$TAG"
-          git push -f origin "$TAG"
+          TAG="lwjgl-3.3.3-arm64-run${{ github.run_number }}"
           gh release create "$TAG" out/*.so \
-            --title "LWJGL 3.3.3 native libraries (arm64 Android)" \
-            --notes "Built from PojavLauncherTeam/lwjgl3 at wip/rebase_3.3.3 using their own ci_build_android.bash, for arm64 (aarch64-linux-android) only. These are the real LWJGL 3.3.3 natives for Android, not a substitute version." \
+            --target "$GITHUB_SHA" \
+            --title "LWJGL 3.3.3 natives (arm64 Android), run ${{ github.run_number }}" \
+            --notes "Built from PojavLauncherTeam/lwjgl3 at wip/rebase_3.3.3 using their own ci_build_android.bash, for arm64 (aarch64-linux-android) only, from commit ${{ github.sha }}. Not yet promoted to the stable tag used by the app." \
             --prerelease
