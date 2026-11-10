@@ -35,6 +35,8 @@ jobs:
 
       - name: Set up Android NDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
 
       - name: Install the exact NDK version this project uses
         run: echo "y" | sdkmanager --install "ndk;29.0.14206865"
