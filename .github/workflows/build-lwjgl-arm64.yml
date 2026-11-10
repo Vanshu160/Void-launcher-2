@@ -70,6 +70,11 @@ jobs:
           path: out/*.so
           if-no-files-found: error
 
+      - name: Check out this repository (for the exact commit)
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
       # Never overwrites or deletes anything: a unique tag per run, created on this exact commit.
       # The stable tag used by Lwjgl333Natives.kt is NOT touched here; promoting a build to it is a
       # separate, explicit step after the phone test.
