@@ -68,7 +68,7 @@ object JnaNatives {
         }
     }
 
-    /** Extracts every jni/arm64-v8a/*.so entry from the .aar (a zip file) into [destDir]. Returns the count. */
+    /** Extracts every .so file under jni/arm64-v8a from the .aar (a zip file) into [destDir]. Returns the count. */
     private fun extractArm64Libs(aarFile: File, destDir: File): Int {
         val prefix = "jni/arm64-v8a/"
         var count = 0
