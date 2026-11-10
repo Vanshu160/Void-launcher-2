@@ -19,6 +19,11 @@ jobs:
       SKIP_LIBFFI: "0"
       SKIP_FREETYPE: "0"
     steps:
+      - name: Check out this repository (for the exact commit)
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
       - name: Checkout PojavLauncherTeam/lwjgl3 (wip/rebase_3.3.3, their own working Android build)
         uses: actions/checkout@v6
         with:
@@ -69,11 +74,6 @@ jobs:
           name: lwjgl-3.3.3-arm64-natives
           path: out/*.so
           if-no-files-found: error
-
-      - name: Check out this repository (for the exact commit)
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 1
 
       # Never overwrites or deletes anything: a unique tag per run, created on this exact commit.
       # The stable tag used by Lwjgl333Natives.kt is NOT touched here; promoting a build to it is a
