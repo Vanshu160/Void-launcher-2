@@ -8,6 +8,7 @@ import com.voidlauncher.app.data.log.AppLog
 import com.voidlauncher.app.data.remote.GameMetadataParser
 import com.voidlauncher.app.data.runtime.JavaRuntimeManager
 import com.voidlauncher.app.data.runtime.JavaRuntimeSpec
+import git.artdeell.dnbootstrap.glfw.GLFW
 import net.kdt.pojavlaunch.utils.JREUtils
 import net.kdt.pojavlaunch.utils.jre.JavaRunner
 import org.json.JSONObject
@@ -145,6 +146,13 @@ class GameLauncher(private val context: Context) {
 
         onStatus("Loading native libraries...")
         loadNative()
+
+        // The GLFW bridge must be initialised before the game's first glfwInit(), which runs on the
+        // JVM thread below. Its static initializer loads libglfw.so and runs the native initialize(),
+        // which stores the JavaVM the render thread needs. PojavLauncher does the same in Platform.initialize.
+        // The callback is called from glfwInit, and native code requires it to be non-null.
+        GLFW.setInitCallback { AppLog.write("GLFW init callback received (glfwInit reached the Android bridge)") }
+        AppLog.write("GLFW bridge initialised before JVM start")
 
         // Same environment the PojavLauncher JVM expects.
         val libsDir = checkNotNull(vmPath.parentFile?.parentFile)
