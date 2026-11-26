@@ -45,6 +45,9 @@ object AppPrefs {
 
     fun float(key: String, default: Float): Float = read(default) { it.getFloat(key, default) }
 
+    /** A saved text value, or null if none is saved. */
+    fun string(key: String): String? = read<String?>(null) { it.getString(key, null) }
+
     fun bool(key: String, default: Boolean): Boolean = read(default) { it.getBoolean(key, default) }
 
     /** The version the user picked, or null if none was saved. */

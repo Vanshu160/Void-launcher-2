@@ -57,7 +57,12 @@ class GameLauncher(private val context: Context) {
     }
 
     /** Starts the game. Returns after starting the JVM thread. Progress goes to [onStatus]. */
-    fun launch(versionId: String, ramMb: Int = 2048, onStatus: (String) -> Unit) {
+    fun launch(
+        versionId: String,
+        ramMb: Int = 2048,
+        renderer: GlRenderer = GlRenderer.DEFAULT,
+        onStatus: (String) -> Unit,
+    ) {
         // Each step goes to the downloads screen and to the loading screen over the game surface.
         val report: (String) -> Unit = { message ->
             GameSurfaceBridge.reportStatus(message)
@@ -68,14 +73,21 @@ class GameLauncher(private val context: Context) {
         val json = JSONObject(metaFile.readText())
         val metadata = GameMetadataParser.parse(metaFile.readText())
 
-        // GL4ES cannot provide the OpenGL 3.2 core that newer Minecraft needs. Stop here, before any native
-        // library loads or the JVM starts, instead of letting Minecraft fail with an OpenGL error later.
+        // The selected renderer may not provide the OpenGL 3.2 core that newer Minecraft needs. Stop here, before any
+        // native library loads or the JVM starts, instead of letting Minecraft fail with an OpenGL error later.
         val releaseTime = json.optString("releaseTime").ifBlank { null }
-        val blockReason = Gl4esRenderer.blockReason(versionId, releaseTime)
-        AppLog.write("Minecraft release time: ${releaseTime ?: "missing"}. GL4ES block: ${blockReason ?: "none"}")
+        val blockReason = Gl4esRenderer.blockReason(renderer, versionId, releaseTime)
+        AppLog.write(
+            "Renderer: ${renderer.label}. Minecraft release time: ${releaseTime ?: "missing"}. Gate: ${blockReason ?: "none"}",
+        )
         if (blockReason != null) {
             // "Launch failed" is the prefix DownloadsViewModel uses to end the busy state.
             report("Launch failed: $blockReason")
+            return
+        }
+        // Only one renderer can load per process. Refuse before any environment variable changes.
+        Gl4esRenderer.conflictReason(renderer)?.let { conflict ->
+            report("Launch failed: $conflict")
             return
         }
 
@@ -186,9 +198,9 @@ class GameLauncher(private val context: Context) {
         Os.setenv("TMPDIR", context.cacheDir.absolutePath, true)
         Os.setenv("LD_LIBRARY_PATH", ldPath, true)
         JREUtils.setLdLibraryPath(ldPath)
-        Gl4esRenderer.environment().forEach { (key, value) -> Os.setenv(key, value, true) }
+        Gl4esRenderer.environment(renderer).forEach { (key, value) -> Os.setenv(key, value, true) }
         // Read back what the process will see, so the log proves the renderer settings were applied.
-        for (key in Gl4esRenderer.environment().keys) {
+        for (key in Gl4esRenderer.environment(renderer).keys) {
             AppLog.write("Renderer env $key=${Os.getenv(key) ?: "(unset)"}")
         }
         AppLog.write("Environment set. LD_LIBRARY_PATH: $ldPath")
@@ -196,7 +208,7 @@ class GameLauncher(private val context: Context) {
         // The renderer must be loaded before the JVM starts. Without it GLFW cannot find an OpenGL
         // EGL config and window creation fails with "EGL: Failed to find support for OpenGL".
         report("Loading the OpenGL renderer...")
-        if (!Gl4esRenderer.prepare(nativeDir) { AppLog.write(it) }) {
+        if (!Gl4esRenderer.prepare(nativeDir, renderer) { AppLog.write(it) }) {
             report("Launch failed: OpenGL renderer failed to load. See the log for details.")
             return
         }

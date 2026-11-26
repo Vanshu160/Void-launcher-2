@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
@@ -46,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.voidlauncher.app.data.launch.GameAction
 import com.voidlauncher.app.data.launch.GameKeybinds
+import com.voidlauncher.app.data.launch.GlRenderer
 import com.voidlauncher.app.ui.components.VoidCard
 import com.voidlauncher.app.ui.components.VoidTab
 import com.voidlauncher.app.ui.components.VoidTabRow
@@ -87,6 +89,10 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
             VoidCard(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                 when (current) {
                     0 -> {
+                        RendererSection(
+                            selected = state.glRenderer,
+                            onSelect = { renderer -> viewModel.edit { it.copy(glRenderer = renderer) } },
+                        )
                         SettingSlider(
                             title = "Resolution scale",
                             description = "Lower values run faster on weaker phones. Saved, not applied yet.",
@@ -166,6 +172,37 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+/** Picks the OpenGL renderer. The choice applies the next time the game starts. */
+@Composable
+private fun RendererSection(selected: GlRenderer, onSelect: (GlRenderer) -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+        Text(
+            text = "OpenGL renderer",
+            style = MaterialTheme.typography.titleMedium,
+            color = colors.onSurface,
+        )
+        Text(
+            text = "GL4ES is the default. NG-GL4ES is experimental and has not been run on a device yet. " +
+                "Only one renderer loads per app session, so restart the app after changing it.",
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.onSurfaceVariant,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            GlRenderer.entries.forEach { renderer ->
+                FilterChip(
+                    selected = renderer == selected,
+                    onClick = { onSelect(renderer) },
+                    label = { Text(renderer.label) },
+                )
             }
         }
     }

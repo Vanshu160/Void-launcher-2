@@ -96,8 +96,10 @@ class DownloadsViewModel(application: Application) : AndroidViewModel(applicatio
             withContext(Dispatchers.IO) {
                 try {
                     // The RAM setting is read at each launch, so a change applies the next time the game starts.
-                    val ramMb = (SettingsStore.load().maxRamGb * 1024).toInt()
-                    launcher.launch(id, ramMb = ramMb) { status ->
+                    // The renderer is read the same way, so a change applies the next time the game starts.
+                    val settings = SettingsStore.load()
+                    val ramMb = (settings.maxRamGb * 1024).toInt()
+                    launcher.launch(id, ramMb = ramMb, renderer = settings.glRenderer) { status ->
                         AppLog.write(status)
                         val finished = status == "Minecraft exited." ||
                             status.startsWith("Minecraft did not start") ||

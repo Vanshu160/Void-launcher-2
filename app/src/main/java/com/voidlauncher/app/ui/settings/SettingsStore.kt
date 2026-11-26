@@ -1,6 +1,7 @@
 package com.voidlauncher.app.ui.settings
 
 import com.voidlauncher.app.data.AppPrefs
+import com.voidlauncher.app.data.launch.GlRenderer
 
 /**
  * Saves and loads the settings screen values through [AppPrefs]. A missing value uses its default,
@@ -21,6 +22,7 @@ object SettingsStore {
             maxRamGb = AppPrefs.float("maxRamGb", d.maxRamGb).coerceIn(1f, 8f),
             showAnimations = AppPrefs.bool("showAnimations", d.showAnimations),
             vulkanDriver = AppPrefs.bool("vulkanDriver", d.vulkanDriver),
+            glRenderer = GlRenderer.fromId(AppPrefs.string("glRenderer")),
         )
     }
 
@@ -36,6 +38,7 @@ object SettingsStore {
             editor.putFloat("maxRamGb", state.maxRamGb)
             editor.putBoolean("showAnimations", state.showAnimations)
             editor.putBoolean("vulkanDriver", state.vulkanDriver)
+            editor.putString("glRenderer", state.glRenderer.id)
         }
     }
 }

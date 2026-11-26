@@ -1,5 +1,7 @@
 package com.voidlauncher.app.ui.settings
 
+import com.voidlauncher.app.data.launch.GlRenderer
+
 data class SettingsUiState(
     val resolutionScale: Float = 1f,
     val fullscreen: Boolean = true,
@@ -11,4 +13,5 @@ data class SettingsUiState(
     val maxRamGb: Float = 4f,
     val showAnimations: Boolean = true,
     val vulkanDriver: Boolean = false,
+    val glRenderer: GlRenderer = GlRenderer.DEFAULT,
 )

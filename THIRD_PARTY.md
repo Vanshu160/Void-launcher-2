@@ -36,7 +36,37 @@ Check each library's own license before adding it.
 - **Binary:** `app/src/main/jniLibs/arm64-v8a/libgl4es_114.so`, copied from PojavLauncher at pinned commit `b32a74357b1f064193beebfe1baa12c226568353`, path `app_pojavlauncher/src/main/jniLibs/arm64-v8a/libgl4es_114.so`
 - **SHA-256:** `74369badbab19940a5d96c2bcebdb6d7c2bbec4bc6bffd533ea0fe557c9de46f`
 - **Checked:** AArch64 ELF shared object. Exports the full EGL API (eglChooseConfig, eglCreateWindowSurface, eglGetProcAddress and others). Depends only on liblog, libc, libm and libdl.
+- **APK copy:** `app/src/main/assets/licenses/gl4es-LICENSE.txt`, byte-identical to the file above, so the notice ships inside the APK.
 - **Status:** license text verified verbatim. Not verified: that the binary was built from upstream source at a specific revision. The Pojav repository does not record a build recipe for it, and the upstream clone is shallow, so its history was not checked.
+
+## NG-GL4ES renderer (native, built from source at compile time, experimental)
+- **Project:** NG-GL4ES (https://github.com/BZLZHH/NG-GL4ES), an OpenGL-over-OpenGL-ES renderer that uses glslang and SPIRV-Cross for shader conversion
+- **License:** MIT. Full text in `app/src/main/assets/licenses/ng-gl4es-LICENSE.txt`, copied byte-for-byte from the pinned `LICENSE` (SHA-256 `51c5b405e035a85462b5211dff42b111dbcf028788327597e69b953d610e9d30`). Its copyright lines: 2016-2018 Sebastien Chevalier, 2013-2016 Ryan Hileman, 2025-2026 BZLZHH.
+- **Pinned commit:** `6e153a1622a8d9ef903f7975aafbef2453571bab`
+- **How it's used:** CMake (`app/src/main/cpp/CMakeLists.txt`) fetches the pinned commit at build time, with its submodules `3rdparty/glslang` and `3rdparty/SPIRV-Cross`. It then applies `app/src/main/cpp/ng-gl4es-patches/0001-void-cmake-source-and-target-paths.patch`, which changes NG-GL4ES's `CMAKE_SOURCE_DIR` and `CMAKE_PROJECT_NAME` uses so they work in a subdirectory build. The output is `libng_gl4es.so`. Nothing from NG-GL4ES is copied into this repository, and no prebuilt NG-GL4ES binary is used.
+- **Bundled code inside the pinned source,** with the notices copied verbatim from each file into `app/src/main/assets/licenses/ng-gl4es-bundled-notices.txt` (SHA-256 `fc34893bf0dd56b384efe0f95098b4f85509b12774f023b8b24aa462cd35f3f5`):
+  - cJSON (MIT), `src/gl/cJSON.c`
+  - Mesa `matheval.c` (Brian Paul, MIT), `src/gl/math/matheval.c`
+  - DXT decompression (Matthäus G. Chajdas, MIT), `src/gl/decompress.c`
+  - Mesa `GL/gl.h` (Brian Paul and VMware, MIT), `include/GL/gl.h`
+  - SGI `GL/glu.h` (SGI Free Software License B 2.0), `include/GL/glu.h`
+  - Khronos `GLES3/gl3.h` (SPDX MIT) and `EGL/egl.h` (SPDX Apache-2.0): only the SPDX notice is in the source. The full Khronos license texts are **not** vendored yet (open item below).
+- **Status:** the source is pinned and the configuration was checked on a host machine (clang 18, C++23, CMake 3.28, no Android SDK). The Android build and the APK contents are verified only by GitHub Actions. Device testing has not been done.
+
+## glslang (native, built from source for NG-GL4ES)
+- **Project:** glslang (https://github.com/KhronosGroup/glslang)
+- **Pinned commit:** `7099c123729e02f81d70559e79ee4360096fdfe5`, through NG-GL4ES's submodule `3rdparty/glslang`
+- **License:** full text in `app/src/main/assets/licenses/glslang-LICENSE.txt` (SHA-256 `17e70c676e1521ff3e4686f04a2053d93a7e28a33be8de7ec37ab0ff72feb677`). The file says that glslang proper uses several licenses, and it lists them all.
+- **Build:** statically linked into `libng_gl4es.so`. NG-GL4ES sets HLSL input, SPIRV-Tools optimizer, glslangValidator and external dependencies off.
+
+## SPIRV-Cross (native, built from source for NG-GL4ES)
+- **Project:** SPIRV-Cross (https://github.com/KhronosGroup/SPIRV-Cross)
+- **Pinned commit:** `adec7acbf41a988713cdb85f93f26c8ca5ea863e`, through NG-GL4ES's submodule `3rdparty/SPIRV-Cross`
+- **License:** Apache-2.0, full text in `app/src/main/assets/licenses/SPIRV-Cross-LICENSE.txt` (SHA-256 `cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30`)
+- **Build:** statically linked into `libng_gl4es.so`, GLSL backend and C API only.
+
+## Open items for the renderer licenses
+- The full Khronos license texts for `GLES3/gl3.h` (MIT) and `EGL/egl.h` (Apache-2.0) are not in the APK. Add them from the Khronos registry before any public release, or confirm that the notice-only copy is enough.
 
 ## mojoexec (native, built at compile time)
 - **Project:** mojoexec, by MojoLauncher (https://github.com/MojoLauncher/mojoexec)
