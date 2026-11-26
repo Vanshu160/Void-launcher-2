@@ -6,6 +6,8 @@ data class SettingsUiState(
     val vsync: Boolean = false,
     val controlScale: Float = 1f,
     val disableGestures: Boolean = false,
+    val touchSensitivity: Float = 1f,
+    val touchpadMode: Boolean = false,
     val maxRamGb: Float = 4f,
     val showAnimations: Boolean = true,
     val vulkanDriver: Boolean = false,

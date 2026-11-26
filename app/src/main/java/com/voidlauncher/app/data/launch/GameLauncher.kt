@@ -24,6 +24,11 @@ class GameLauncher(private val context: Context) {
     private val gameDir = File(minecraftRoot, "game")
     private val runtimes = JavaRuntimeManager(context)
 
+    private companion object {
+        /** How long to wait for the game screen to hand its surface to GLFW before giving up. */
+        const val SURFACE_TIMEOUT_MS = 20_000L
+    }
+
     /** Loads the native libraries. Throws UnsatisfiedLinkError if they are missing from the APK. */
     private fun loadNative() {
         System.loadLibrary("mojoexec")
@@ -53,6 +58,11 @@ class GameLauncher(private val context: Context) {
 
     /** Starts the game. Returns after starting the JVM thread. Progress goes to [onStatus]. */
     fun launch(versionId: String, ramMb: Int = 2048, onStatus: (String) -> Unit) {
+        // Each step goes to the downloads screen and to the loading screen over the game surface.
+        val report: (String) -> Unit = { message ->
+            GameSurfaceBridge.reportStatus(message)
+            onStatus(message)
+        }
         val metaFile = File(minecraftRoot, "versions/$versionId/$versionId.json")
         check(metaFile.isFile) { "Game files for $versionId are not downloaded." }
         val json = JSONObject(metaFile.readText())
@@ -68,7 +78,7 @@ class GameLauncher(private val context: Context) {
         AppLog.write("JNA version in this game: ${jnaVersion(json) ?: "not listed"}")
 
         gameDir.mkdirs()
-        onStatus("Checking LWJGL arm64 natives...")
+        report("Checking LWJGL arm64 natives...")
         val lwjglNativesDir = Lwjgl333Natives.ensure(minecraftRoot) { AppLog.write(it) }
         val jnaNativesDir = JnaNatives.ensure(minecraftRoot, jnaVersion(json)) { AppLog.write(it) }
 
@@ -98,6 +108,9 @@ class GameLauncher(private val context: Context) {
             "-Dpojav.path.minecraft=${minecraftRoot.absolutePath}",
             "-Dorg.lwjgl.vulkan.libname=libvulkan.so",
             "-Dorg.lwjgl.spvc.libname=spirv-cross-c-shared",
+            // LWJGL's OpenGL loader asks for this name. The dlopen hook returns the GL4ES handle that
+            // Gl4esRenderer.prepare loaded, so this must match PojavLauncher's GameRunner.
+            "-Dorg.lwjgl.opengl.libname=libGLMojo.so",
             "-Dorg.lwjgl.sdl.libname=${File(nativeDir, "libSDL3.so").absolutePath}",
             "-Dorg.lwjgl.system.allocator=system",
             "-Dorg.lwjgl.system.SharedLibraryExtractPath=${lwjglExtractDir.absolutePath}",
@@ -144,14 +157,24 @@ class GameLauncher(private val context: Context) {
         }
         val mainClass = json.getString("mainClass")
 
-        onStatus("Loading native libraries...")
+        report("Loading native libraries...")
         loadNative()
+
+        // The renderer must be loaded before the JVM starts. Without it GLFW cannot find an OpenGL
+        // EGL config and window creation fails with "EGL: Failed to find support for OpenGL".
+        report("Loading the OpenGL renderer...")
+        if (!Gl4esRenderer.prepare(nativeDir) { AppLog.write(it) }) {
+            report("Launch failed: OpenGL renderer failed to load. See the log for details.")
+            return
+        }
 
         // The GLFW bridge must be initialised before the game's first glfwInit(), which runs on the
         // JVM thread below. Its static initializer loads libglfw.so and runs the native initialize(),
         // which stores the JavaVM the render thread needs. PojavLauncher does the same in Platform.initialize.
         // The callback is called from glfwInit, and native code requires it to be non-null.
         GLFW.setInitCallback { AppLog.write("GLFW init callback received (glfwInit reached the Android bridge)") }
+        // Minecraft's copy and paste goes through these. Without an implementation, GLFW's callbacks would fail.
+        GLFW.setClipboardImpl(GameClipboard(context))
         AppLog.write("GLFW bridge initialised before JVM start")
 
         // Same environment the PojavLauncher JVM expects.
@@ -168,9 +191,30 @@ class GameLauncher(private val context: Context) {
         Os.setenv("TMPDIR", context.cacheDir.absolutePath, true)
         Os.setenv("LD_LIBRARY_PATH", ldPath, true)
         JREUtils.setLdLibraryPath(ldPath)
+        Gl4esRenderer.environment().forEach { (key, value) -> Os.setenv(key, value, true) }
         AppLog.write("Environment set. LD_LIBRARY_PATH: $ldPath")
 
-        onStatus("Starting Java ${spec.majorVersion} and Minecraft $versionId...")
+        // Shows the game screen and waits for its rendering surface. The surface goes to GLFW first, and
+        // only then does the JVM start, the same order as PojavLauncher (onSurfaceAvailable, then runCraft).
+        GameSurfaceBridge.beginGame()
+        GameSurfaceBridge.markGlfwReady()
+        report("Waiting for the game screen...")
+        val surfaceReady = GameSurfaceBridge.awaitFirstSurface(SURFACE_TIMEOUT_MS)
+        if (GameSurfaceBridge.isLaunchCancelled()) {
+            GameSurfaceBridge.endGame()
+            AppLog.write("Launch cancelled from the loading screen. Minecraft was not started.")
+            report("Launch cancelled.")
+            return
+        }
+        if (!surfaceReady) {
+            GameSurfaceBridge.endGame()
+            AppLog.write("No rendering surface after ${SURFACE_TIMEOUT_MS / 1000} s. Minecraft was not started.")
+            report("Launch failed: the game screen did not appear. Keep the app open and try again.")
+            return
+        }
+        AppLog.write("Rendering surface ready. Starting the JVM.")
+
+        report("Starting Java ${spec.majorVersion} and Minecraft $versionId...")
         Thread(null, {
             try {
                 AppLog.write("JVM thread started")
@@ -193,10 +237,13 @@ class GameLauncher(private val context: Context) {
                 AppLog.write("Calling nativeLoadJVM for $mainClass")
                 val ok = JavaRunner.nativeLoadJVM(vmPath.absolutePath, javaArgsPtr, mainClass, appArgsPtr, false)
                 AppLog.write("nativeLoadJVM returned $ok")
-                onStatus(if (ok) "Minecraft exited." else "Minecraft did not start.")
+                report(if (ok) "Minecraft exited." else "Minecraft did not start.")
             } catch (e: Throwable) {
                 AppLog.write("JVM thread error: ${e.message ?: e.javaClass.simpleName}")
-                onStatus("Launch failed: ${e.message ?: e.javaClass.simpleName}")
+                report("Launch failed: ${e.message ?: e.javaClass.simpleName}")
+            } finally {
+                // The game has stopped. Hide the surface, and stop forwarding to GLFW so the teardown cannot wait.
+                GameSurfaceBridge.endGame()
             }
         }, "minecraft-jvm", 64L * 1024 * 1024).start()
     }

@@ -29,6 +29,15 @@ Check each library's own license before adding it.
 | Apache Commons Compress 1.27.1 | Reads tar archives | Apache-2.0 |
 | XZ for Java 1.10 | Decompresses .xz archives | Public domain (per project) |
 
+## GL4ES renderer (native, bundled in the APK)
+- **Project:** GL4ES (https://github.com/ptitSeb/gl4es), OpenGL over OpenGL ES
+- **License:** MIT. Full text in `third_party/licenses/gl4es-LICENSE.txt`, copied byte-for-byte from the upstream `LICENSE` file at `https://github.com/ptitSeb/gl4es` (upstream HEAD `8b1a3da5d2331d0f88b70be25963182d46eed857` when copied; SHA-256 `69a3049c77abd88658f6ad7cf6a5b6ceb5cf03b80e60f7c4657d90322cfab7bd`).
+- **Copyright:** Copyright (c) 2016-2018 Sebastien Chevalier; Copyright (c) 2013-2016 Ryan Hileman.
+- **Binary:** `app/src/main/jniLibs/arm64-v8a/libgl4es_114.so`, copied from PojavLauncher at pinned commit `b32a74357b1f064193beebfe1baa12c226568353`, path `app_pojavlauncher/src/main/jniLibs/arm64-v8a/libgl4es_114.so`
+- **SHA-256:** `74369badbab19940a5d96c2bcebdb6d7c2bbec4bc6bffd533ea0fe557c9de46f`
+- **Checked:** AArch64 ELF shared object. Exports the full EGL API (eglChooseConfig, eglCreateWindowSurface, eglGetProcAddress and others). Depends only on liblog, libc, libm and libdl.
+- **Status:** license text verified verbatim. Not verified: that the binary was built from upstream source at a specific revision. The Pojav repository does not record a build recipe for it, and the upstream clone is shallow, so its history was not checked.
+
 ## mojoexec (native, built at compile time)
 - **Project:** mojoexec, by MojoLauncher (https://github.com/MojoLauncher/mojoexec)
 - **License:** MIT, Copyright (c) 2026 Maksim Belov (full text in the upstream repository's LICENSE file)
@@ -64,6 +73,7 @@ Check each library's own license before adding it.
 - **License:** zlib/libpng license (full text in the upstream repository's LICENSE.md)
 - **Pinned commit:** `7900e19fd2dbcad5abb4affc3b9d56c27e164c59`
 - **How it's used:** CMake fetches the pinned commit at build time. No GLFW source is copied into this repository.
+- **Local patch:** `app/src/main/cpp/glfw-patches/0001-void-input-queue-and-surface-lifecycle.patch` is applied to the fetched copy at build time with `git apply`. It changes the Android input queue (thread safety, mouse-position events, UTF-16 text) and surface lifecycle. It is derived from the GLFW fork above, which keeps its zlib/libpng license; the patch file carries no separate license.
 
 ## MojoSDL (SDL3 fork for Android, native, built at compile time)
 - **Project:** MojoSDL (https://github.com/MojoLauncher/MojoSDL), a fork of SDL3 (https://github.com/libsdl-org/SDL)

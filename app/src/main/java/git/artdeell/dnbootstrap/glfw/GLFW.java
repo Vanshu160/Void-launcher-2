@@ -58,12 +58,15 @@ public class GLFW {
 
     @SuppressWarnings("unused") // Used from native
     private static void receiveGrabState(boolean isGrabbing) {
-        mGrabListener.onGrabState(isGrabbing);
+        // Called from native code. An exception here would be left pending in the JNI call, so a missing listener is ignored.
+        GrabListener listener = mGrabListener;
+        if (listener != null) listener.onGrabState(isGrabbing);
     }
 
     @SuppressWarnings("unused") // Used from native
     private static void receiveCursorPos(double x, double y) {
-        mPositionCallback.receive(x, y);
+        PosCallback callback = mPositionCallback;
+        if (callback != null) callback.receive(x, y);
     }
 
     @SuppressWarnings("unused") // Used from native
@@ -80,17 +83,23 @@ public class GLFW {
 
     @SuppressWarnings("unused") // Used from native
     private static void useCursor(GLFWCursor glfwCursor) {
-        mCursorCallback.onCursorUse(glfwCursor);
+        CursorCallback callback = mCursorCallback;
+        if (callback != null) callback.onCursorUse(glfwCursor);
     }
 
     @SuppressWarnings("unused") // Used from native
     private static String getClipboardString() {
-        return mClipboardImpl.getClipboardString();
+        // Called from native code. With no clipboard set, the answer is an empty string, which GLFW accepts.
+        GLFWClipboard clipboard = mClipboardImpl;
+        if (clipboard == null) return "";
+        String text = clipboard.getClipboardString();
+        return text == null ? "" : text;
     }
 
     @SuppressWarnings("unused") // Used from native
     private static void setClipboardString(String str) {
-        mClipboardImpl.setClipboardString(str);
+        GLFWClipboard clipboard = mClipboardImpl;
+        if (clipboard != null) clipboard.setClipboardString(str);
     }
 
     @SuppressWarnings("unused") // Used from native
@@ -103,12 +112,15 @@ public class GLFW {
         }
         gamepadAxisBuffer = axisFloatBuffer;
         gamepadButtonBuffer = buttonBuffer;
-        gamepadEnabler.onEnableGamepad();
+        // The buffers are stored even without a handler, so the native side keeps working. The handler is optional.
+        GamepadEnableHandler enabler = gamepadEnabler;
+        if (enabler != null) enabler.onEnableGamepad();
     }
 
     @SuppressWarnings("unused") // Used from native
     public static void receiveInit() {
-        onInitCallback.run();
+        Runnable callback = onInitCallback;
+        if (callback != null) callback.run();
     }
 
     public static native void initialize();

@@ -39,6 +39,9 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/MojoLauncher/glfw.git
     GIT_TAG 7900e19fd2dbcad5abb4affc3b9d56c27e164c59
     GIT_SUBMODULES ""
+    # Void Launcher's fixes to the fork's input queue and surface lifecycle. See glfw-patches/README.md.
+    # The patch must apply cleanly to the pinned commit; the build fails if it does not.
+    PATCH_COMMAND git apply --whitespace=nowarn "${CMAKE_CURRENT_SOURCE_DIR}/glfw-patches/0001-void-input-queue-and-surface-lifecycle.patch"
 )
 FetchContent_MakeAvailable(glfw)
 target_compile_options(glfw PRIVATE -Wno-nullability-completeness)

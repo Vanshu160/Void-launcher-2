@@ -101,6 +101,20 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
                             checked = state.disableGestures,
                             onChange = { value -> viewModel.edit { it.copy(disableGestures = value) } },
                         )
+                        SettingSwitch(
+                            title = "Touchpad mode",
+                            description = "Finger movement moves the cursor, and a tap clicks where it is. Good for menus and Minecraft windows.",
+                            checked = state.touchpadMode,
+                            onChange = { value -> viewModel.edit { it.copy(touchpadMode = value) } },
+                        )
+                        SettingSlider(
+                            title = "Touch sensitivity",
+                            description = "How far the cursor moves for each finger movement.",
+                            value = state.touchSensitivity,
+                            range = 0.25f..3f,
+                            valueText = "${(state.touchSensitivity * 100).roundToInt()}%",
+                            onChange = { value -> viewModel.edit { it.copy(touchSensitivity = value) } },
+                        )
                         SettingSlider(
                             title = "Control scale",
                             description = "Make on-screen buttons larger or smaller.",
