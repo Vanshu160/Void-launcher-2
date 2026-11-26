@@ -4,7 +4,7 @@ package com.voidlauncher.app.data.launch
  * The touch and input options the game screen reads. The settings screen pushes its values here
  * through [update]. Values are read on the main thread, but are volatile so any thread may read them.
  *
- * Settings are kept in memory only, because the launcher has no settings storage yet (see SettingsViewModel).
+ * SettingsViewModel pushes the values here at startup and after every change. They are saved by SettingsStore.
  */
 object GameInputSettings {
     /** Multiplier for finger and mouse movement while the cursor is relative. */

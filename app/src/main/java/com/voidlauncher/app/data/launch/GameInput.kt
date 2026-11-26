@@ -257,7 +257,8 @@ object GameInput {
         // Control characters (newline, tab, backspace) are not text. Their keys are sent as key events above.
         val unicode = event.getUnicodeChar(event.metaState) and 0xFFFF
         val codepoint = if (pressed && unicode >= 0x20) unicode.toChar() else 0.toChar()
-        GLFW.sendRawKeyEvent(code, if (pressed) GLFW_PRESS else GLFW_RELEASE, modsFrom(event.metaState), codepoint)
+        // Bound keys send their action's GLFW key, and other keys go straight to GLFW. See GameKeybinds.
+        GameKeybinds.route(code, pressed, modsFrom(event.metaState), codepoint)
         return true
     }
 

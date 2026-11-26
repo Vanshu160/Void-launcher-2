@@ -1,10 +1,13 @@
 package com.voidlauncher.app.ui.settings
 
+import android.view.KeyEvent
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,15 +26,25 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.voidlauncher.app.data.launch.GameAction
+import com.voidlauncher.app.data.launch.GameKeybinds
 import com.voidlauncher.app.ui.components.VoidCard
 import com.voidlauncher.app.ui.components.VoidTab
 import com.voidlauncher.app.ui.components.VoidTabRow
@@ -75,7 +88,7 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
                     0 -> {
                         SettingSlider(
                             title = "Resolution scale",
-                            description = "Lower values run faster on weaker phones.",
+                            description = "Lower values run faster on weaker phones. Saved, not applied yet.",
                             value = state.resolutionScale,
                             range = 0.5f..1f,
                             valueText = "${(state.resolutionScale * 100).roundToInt()}%",
@@ -83,13 +96,13 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
                         )
                         SettingSwitch(
                             title = "Fullscreen",
-                            description = "Hide the status bar while playing.",
+                            description = "Hide the status bar while playing. Saved, not applied yet.",
                             checked = state.fullscreen,
                             onChange = { value -> viewModel.edit { it.copy(fullscreen = value) } },
                         )
                         SettingSwitch(
                             title = "V-Sync",
-                            description = "Syncs frames to the screen to reduce tearing.",
+                            description = "Syncs frames to the screen to reduce tearing. Saved, not applied yet.",
                             checked = state.vsync,
                             onChange = { value -> viewModel.edit { it.copy(vsync = value) } },
                         )
@@ -117,17 +130,18 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
                         )
                         SettingSlider(
                             title = "Control scale",
-                            description = "Make on-screen buttons larger or smaller.",
+                            description = "Make on-screen buttons larger or smaller. Saved, not applied yet.",
                             value = state.controlScale,
                             range = 0.5f..1.5f,
                             valueText = "${(state.controlScale * 100).roundToInt()}%",
                             onChange = { value -> viewModel.edit { it.copy(controlScale = value) } },
                         )
+                        KeybindSection(viewModel = viewModel)
                     }
                     2 -> {
                         SettingSlider(
                             title = "Maximum memory",
-                            description = "How much RAM Minecraft may use.",
+                            description = "How much RAM Minecraft may use. Applies the next time you start the game.",
                             value = state.maxRamGb,
                             range = 1f..8f,
                             valueText = "${state.maxRamGb.roundToInt()} GB",
@@ -145,7 +159,7 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
                     else -> {
                         SettingSwitch(
                             title = "Vulkan driver (experimental)",
-                            description = "May crash on some devices. Try it only if the default fails.",
+                            description = "Saved, not applied yet: only the GL4ES renderer runs. May crash on some devices.",
                             checked = state.vulkanDriver,
                             onChange = { value -> viewModel.edit { it.copy(vulkanDriver = value) } },
                         )
@@ -153,6 +167,99 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
                 }
             }
         }
+    }
+}
+
+/** Lists each game action with its key. Tapping an action waits for a hardware key press. */
+@Composable
+private fun KeybindSection(viewModel: SettingsViewModel) {
+    val bindings by viewModel.keybinds.collectAsStateWithLifecycle()
+    val colors = MaterialTheme.colorScheme
+    var capturing by remember { mutableStateOf<GameAction?>(null) }
+    var message by remember { mutableStateOf<String?>(null) }
+
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+        Text(
+            text = "Keybinds",
+            style = MaterialTheme.typography.titleMedium,
+            color = colors.onSurface,
+        )
+        Text(
+            text = "Tap an action, then press a hardware keyboard key. Back cancels. On-screen keyboards cannot set keybinds, and each key can be used by one action only.",
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.onSurfaceVariant,
+        )
+        GameAction.entries.forEach { action ->
+            KeybindRow(
+                action = action,
+                keyCode = bindings[action] ?: action.defaultKeyCode,
+                capturing = capturing == action,
+                onStart = {
+                    capturing = action
+                    message = null
+                },
+                onCapture = { code ->
+                    message = viewModel.bindKey(action, code)
+                    if (message == null) capturing = null
+                },
+                onCancel = { capturing = null },
+            )
+        }
+        message?.let {
+            Text(text = it, style = MaterialTheme.typography.bodySmall, color = colors.error)
+        }
+        TextButton(
+            onClick = {
+                capturing = null
+                message = null
+                viewModel.resetKeybinds()
+            },
+        ) {
+            Text("Reset keybinds")
+        }
+    }
+}
+
+@Composable
+private fun KeybindRow(
+    action: GameAction,
+    keyCode: Int,
+    capturing: Boolean,
+    onStart: () -> Unit,
+    onCapture: (Int) -> Unit,
+    onCancel: () -> Unit,
+) {
+    val colors = MaterialTheme.colorScheme
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(capturing) {
+        if (capturing) focus.requestFocus()
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp)
+            .focusRequester(focus)
+            .focusable()
+            .clickable(enabled = !capturing, onClick = onStart)
+            .onPreviewKeyEvent { event ->
+                if (!capturing || event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                val code = event.nativeKeyEvent.keyCode
+                if (code == KeyEvent.KEYCODE_BACK) onCancel() else onCapture(code)
+                true
+            },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = action.label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = colors.onSurface,
+        )
+        Text(
+            text = if (capturing) "Press a key..." else GameKeybinds.keyName(keyCode),
+            style = MaterialTheme.typography.titleMedium,
+            color = if (capturing) colors.secondary else colors.primary,
+        )
     }
 }
 

@@ -5,6 +5,7 @@ import com.voidlauncher.app.domain.model.ModSearchResult
 
 data class ModsUiState(
     val gameVersion: String? = null,
+    val loader: String = "fabric",
     val query: String = "",
     val results: List<ModSearchResult> = emptyList(),
     val installed: List<InstalledMod> = emptyList(),
