@@ -68,6 +68,20 @@ class GameLauncher(private val context: Context) {
         val json = JSONObject(metaFile.readText())
         val metadata = GameMetadataParser.parse(metaFile.readText())
 
+        // GL4ES cannot provide the OpenGL 3.2 core that newer Minecraft needs. Stop here, before any native
+        // library loads or the JVM starts, instead of letting Minecraft fail with an OpenGL error later.
+        val releaseTime = json.optString("releaseTime")
+        val gl4esSupported = Gl4esRenderer.supportsVersion(releaseTime)
+        AppLog.write("Minecraft release time: ${releaseTime.ifBlank { "unknown" }}. GL4ES supports it: ${gl4esSupported ?: "unknown (allowed)"}")
+        if (gl4esSupported == false) {
+            // "Launch failed" is the prefix DownloadsViewModel uses to end the busy state.
+            report(
+                "Launch failed: Minecraft $versionId needs OpenGL 3.2, which the GL4ES renderer (OpenGL 2.1) " +
+                    "cannot provide. Choose a version released before 7 January 2025, such as 1.21.4.",
+            )
+            return
+        }
+
         val spec = JavaRuntimeSpec.forMajor(metadata.javaMajorVersion)
         check(runtimes.isInstalled(spec)) { "Java ${spec.majorVersion} is not installed yet." }
         val runtimeHome = runtimes.home(spec)
@@ -160,6 +174,28 @@ class GameLauncher(private val context: Context) {
         report("Loading native libraries...")
         loadNative()
 
+        // Same environment the PojavLauncher JVM expects. It is set before the renderer loads, because GL4ES
+        // reads its LIBGL_* variables at load time. PojavLauncher's GameRenderer does the same order.
+        val libsDir = checkNotNull(vmPath.parentFile?.parentFile)
+        val ldPath = listOf(
+            libsDir,
+            nativeDir,
+            vmPath.parentFile,
+            File(libsDir, "jli"),
+        ).let { base -> listOfNotNull(jnaNativesDir, lwjglNativesDir) + base }
+            .joinToString(":") { it.absolutePath }
+        Os.setenv("JAVA_HOME", runtimeHome.absolutePath, true)
+        Os.setenv("HOME", gameDir.absolutePath, true)
+        Os.setenv("TMPDIR", context.cacheDir.absolutePath, true)
+        Os.setenv("LD_LIBRARY_PATH", ldPath, true)
+        JREUtils.setLdLibraryPath(ldPath)
+        Gl4esRenderer.environment().forEach { (key, value) -> Os.setenv(key, value, true) }
+        // Read back what the process will see, so the log proves the renderer settings were applied.
+        for (key in Gl4esRenderer.environment().keys) {
+            AppLog.write("Renderer env $key=${Os.getenv(key) ?: "(unset)"}")
+        }
+        AppLog.write("Environment set. LD_LIBRARY_PATH: $ldPath")
+
         // The renderer must be loaded before the JVM starts. Without it GLFW cannot find an OpenGL
         // EGL config and window creation fails with "EGL: Failed to find support for OpenGL".
         report("Loading the OpenGL renderer...")
@@ -176,23 +212,6 @@ class GameLauncher(private val context: Context) {
         // Minecraft's copy and paste goes through these. Without an implementation, GLFW's callbacks would fail.
         GLFW.setClipboardImpl(GameClipboard(context))
         AppLog.write("GLFW bridge initialised before JVM start")
-
-        // Same environment the PojavLauncher JVM expects.
-        val libsDir = checkNotNull(vmPath.parentFile?.parentFile)
-        val ldPath = listOf(
-            libsDir,
-            nativeDir,
-            vmPath.parentFile,
-            File(libsDir, "jli"),
-        ).let { base -> listOfNotNull(jnaNativesDir, lwjglNativesDir) + base }
-            .joinToString(":") { it.absolutePath }
-        Os.setenv("JAVA_HOME", runtimeHome.absolutePath, true)
-        Os.setenv("HOME", gameDir.absolutePath, true)
-        Os.setenv("TMPDIR", context.cacheDir.absolutePath, true)
-        Os.setenv("LD_LIBRARY_PATH", ldPath, true)
-        JREUtils.setLdLibraryPath(ldPath)
-        Gl4esRenderer.environment().forEach { (key, value) -> Os.setenv(key, value, true) }
-        AppLog.write("Environment set. LD_LIBRARY_PATH: $ldPath")
 
         // Shows the game screen and waits for its rendering surface. The surface goes to GLFW first, and
         // only then does the JVM start, the same order as PojavLauncher (onSurfaceAvailable, then runCraft).

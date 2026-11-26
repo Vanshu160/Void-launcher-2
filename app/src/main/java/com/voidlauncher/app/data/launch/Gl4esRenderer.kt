@@ -2,6 +2,9 @@ package com.voidlauncher.app.data.launch
 
 import git.artdeell.mojoexec.MojoExec
 import java.io.File
+import java.time.Instant
+import java.time.OffsetDateTime
+import java.time.format.DateTimeParseException
 
 /**
  * Loads the GL4ES renderer (OpenGL over OpenGL ES) before the Minecraft JVM starts, the same way
@@ -20,6 +23,27 @@ object Gl4esRenderer {
 
     /** The GLES version PojavLauncher passes for GL4ES ("opengles2"). */
     private const val GLES_VERSION = 2
+
+    /**
+     * Minecraft releases from this date on need OpenGL 3.2 core. GL4ES 1.1.4 targets OpenGL 2.1, so it cannot
+     * run them. PojavLauncher uses the same cutoff (GameRunner.isGl4esCompatible, 2025-01-07) and switches to
+     * its GLES 3 renderer instead, which this project does not bundle.
+     */
+    private val GL32_REQUIRED_SINCE: Instant = Instant.parse("2025-01-07T00:00:00Z")
+
+    /**
+     * True if Minecraft [releaseTime] (the version JSON's ISO 8601 value) is before the OpenGL 3.2 cutoff, false if
+     * it is on or after, and null if the value is missing or cannot be parsed.
+     */
+    fun supportsVersion(releaseTime: String?): Boolean? {
+        if (releaseTime.isNullOrBlank()) return null
+        val released = try {
+            OffsetDateTime.parse(releaseTime).toInstant()
+        } catch (e: DateTimeParseException) {
+            return null
+        }
+        return released.isBefore(GL32_REQUIRED_SINCE)
+    }
 
     /**
      * Set once a renderer loads in this process. The JVM can only start once per process, so
@@ -57,6 +81,8 @@ object Gl4esRenderer {
             return false
         }
         MojoExec.setNativeLibraryDir(nativeLibDir.absolutePath)
+        // GL4ES reads its LIBGL_* variables when it loads, so the environment must be set before this call.
+        log("Loading GL4ES on thread ${Thread.currentThread().name} (id ${Thread.currentThread().id})")
         val ok = MojoExec.prepareEgl(library.absolutePath, false, true, GLES_VERSION)
         if (ok) {
             log("GL4ES renderer loaded from ${library.absolutePath}")

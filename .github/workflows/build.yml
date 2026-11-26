@@ -36,6 +36,17 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
+      # Unstripped native libraries from the same build as the APK. A native crash reports an offset such as
+      # libmojort.so+0x596c, and only these copies (not the stripped ones in the APK) can map it to a function.
+      - name: Upload unstripped native libraries
+        if: success()
+        uses: actions/upload-artifact@v7
+        with:
+          name: void-launcher-native-symbols
+          path: app/build/intermediates/**/obj/arm64-v8a/*.so
+          if-no-files-found: warn
+          retention-days: 30
+
       - name: Publish APK as a GitHub Release (main only)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
