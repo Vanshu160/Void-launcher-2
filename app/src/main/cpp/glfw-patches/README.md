@@ -41,3 +41,7 @@ Check that it applies to a clean checkout before committing it.
 - `src/android_window.c`: `gcc -fsyntax-only` against the JDK JNI header and stub Android, EGL, and Vulkan headers. Zero warnings. This checks syntax and types only. It is not an NDK build.
 - Every JNI export in `src/android_window.c` and `src/android_joystick.c` matches its Java `native` declaration in `GLFW.java`, by name and argument list.
 - Not verified: the NDK build, runtime behaviour on a device, and the EGL behaviour described above.
+
+## Swap surface read under lock (EGL race fix)
+
+`swapBuffersEGL` (egl_context.c) read `window->context.egl.surface` without `nw_egl_mutex`, while `nativeSurfaceDestroyed` clears it on another thread. The new `_glfwSwapSurfaceAndroid` (android_window.c, declared in android_egl_context_hook.h) reads it under the lock. If no surface is present, the swap is skipped until the next surface callback restores one.

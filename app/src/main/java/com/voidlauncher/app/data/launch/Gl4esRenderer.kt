@@ -2,8 +2,7 @@ package com.voidlauncher.app.data.launch
 
 import git.artdeell.mojoexec.MojoExec
 import java.io.File
-import java.time.Instant
-import java.time.OffsetDateTime
+import java.time.LocalDate
 import java.time.format.DateTimeParseException
 
 /**
@@ -25,24 +24,39 @@ object Gl4esRenderer {
     private const val GLES_VERSION = 2
 
     /**
-     * Minecraft releases from this date on need OpenGL 3.2 core. GL4ES 1.1.4 targets OpenGL 2.1, so it cannot
-     * run them. PojavLauncher uses the same cutoff (GameRunner.isGl4esCompatible, 2025-01-07) and switches to
-     * its GLES 3 renderer instead, which this project does not bundle.
+     * PojavLauncher's GameRunner.isGl4esCompatible calls DateUtils.dateBefore(releaseDate, 2025, 1, 7). That
+     * helper takes a zero-based month, so 1 is February: a release is allowed when it is before 7 February 2025.
+     * Minecraft releases from that date on need OpenGL 3.2 core, which GL4ES 1.1.4 (OpenGL 2.1) cannot provide.
+     * PojavLauncher then switches to its GLES 3 renderer, which this project does not bundle.
      */
-    private val GL32_REQUIRED_SINCE: Instant = Instant.parse("2025-01-07T00:00:00Z")
+    private val RELEASE_CUTOFF: LocalDate = LocalDate.of(2025, 2, 7)
+    private const val CUTOFF_TEXT = "7 February 2025"
 
     /**
-     * True if Minecraft [releaseTime] (the version JSON's ISO 8601 value) is before the OpenGL 3.2 cutoff, false if
-     * it is on or after, and null if the value is missing or cannot be parsed.
+     * Returns null if GL4ES can run Minecraft [versionId] released at [releaseTime] (the version JSON's ISO 8601
+     * "releaseTime"). Otherwise returns the reason to show the player.
+     *
+     * A missing or unreadable release date is refused. The cutoff cannot be checked without it, and a version
+     * file that lacks a date is not one that Mojang publishes.
+     *
+     * Only the date part is compared, as PojavLauncher does, so the time zone of the release timestamp does not matter.
      */
-    fun supportsVersion(releaseTime: String?): Boolean? {
-        if (releaseTime.isNullOrBlank()) return null
-        val released = try {
-            OffsetDateTime.parse(releaseTime).toInstant()
-        } catch (e: DateTimeParseException) {
-            return null
+    fun blockReason(versionId: String, releaseTime: String?): String? {
+        if (releaseTime.isNullOrBlank()) {
+            return "Minecraft $versionId has no release date in its version file, so GL4ES cannot check it. " +
+                "Download the game files again."
         }
-        return released.isBefore(GL32_REQUIRED_SINCE)
+        val released = try {
+            LocalDate.parse(releaseTime.substringBefore('T'))
+        } catch (e: DateTimeParseException) {
+            return "Minecraft $versionId has an unreadable release date ($releaseTime), so GL4ES cannot check it. " +
+                "Download the game files again."
+        }
+        if (!released.isBefore(RELEASE_CUTOFF)) {
+            return "Minecraft $versionId was released on $released and needs OpenGL 3.2, which the GL4ES renderer " +
+                "(OpenGL 2.1) cannot provide. Choose a version released before $CUTOFF_TEXT, such as 1.21.4."
+        }
+        return null
     }
 
     /**

@@ -1,3 +1,16 @@
+diff --git a/src/android_egl_context_hook.h b/src/android_egl_context_hook.h
+index e7f5fe6c..b0a9673e 100644
+--- a/src/android_egl_context_hook.h
++++ b/src/android_egl_context_hook.h
+@@ -13,6 +13,8 @@
+ EGLSurface _glfwManageEglSurfaceAndroid(_GLFWwindow*);
+ // Check if the surface has been changed before attempting to swap buffers
+ GLFWbool _glfwSwapBuffersAttentionEglAndroid(_GLFWwindow*);
++// The window's EGLSurface, read under the same lock that the surface-destroy callback takes
++EGLSurface _glfwSwapSurfaceAndroid(_GLFWwindow*);
+ 
+ void* _glfwLoadEglAndroid(void);
+ 
 diff --git a/src/android_input_queue.c b/src/android_input_queue.c
 index b9fc32fc..0c0964fc 100644
 --- a/src/android_input_queue.c
@@ -203,7 +216,7 @@ index 8c5fe787..c847fc4e 100644
  
  typedef void (*dequeue_callback_t)(input_event_t*);
 diff --git a/src/android_window.c b/src/android_window.c
-index 74746323..ca2a9913 100644
+index 74746323..49f9a3f6 100644
 --- a/src/android_window.c
 +++ b/src/android_window.c
 @@ -57,6 +57,7 @@
@@ -415,7 +428,7 @@ index 74746323..ca2a9913 100644
      if(window == surfaceOwner && !ownedByVulkan) {
          switch (window->android.mode) {
              case GLFW_ANDROID_WINDOW_MODE_UNDEFINED: return true;
-@@ -1088,6 +1125,14 @@ GLFWbool _glfwSwapBuffersAttentionEglAndroid(_GLFWwindow* window) {
+@@ -1088,6 +1125,23 @@ GLFWbool _glfwSwapBuffersAttentionEglAndroid(_GLFWwindow* window) {
      return false;
  }
  
@@ -427,10 +440,19 @@ index 74746323..ca2a9913 100644
 +    return result;
 +}
 +
++// nativeSurfaceDestroyed clears window->context.egl.surface on another thread, under nw_egl_mutex. Reading the
++// field without the lock could hand eglSwapBuffers a surface that was just destroyed. The lock is held for the read only.
++EGLSurface _glfwSwapSurfaceAndroid(_GLFWwindow* window) {
++    pthread_mutex_lock(&nw_egl_mutex);
++    EGLSurface surface = window->context.egl.surface;
++    pthread_mutex_unlock(&nw_egl_mutex);
++    return surface;
++}
++
  const char* _glfwGetScancodeNameAndroid(int scancode)
  {
      switch (scancode) {
-@@ -1388,14 +1433,48 @@ void android_notify_init(){
+@@ -1388,14 +1442,48 @@ void android_notify_init(){
  }
  
  
@@ -480,7 +502,7 @@ index 74746323..ca2a9913 100644
      if(ownedByVulkan) {
          pthread_mutex_lock(&nw_vulkan_mutex);
          pthread_cond_broadcast(&nw_vulkan_cond);
-@@ -1411,29 +1490,24 @@ Java_git_artdeell_dnbootstrap_glfw_GLFW_nativeSurfaceUpdated(JNIEnv *env, jclass
+@@ -1411,29 +1499,24 @@ Java_git_artdeell_dnbootstrap_glfw_GLFW_nativeSurfaceUpdated(JNIEnv *env, jclass
  JNIEXPORT void JNICALL
  Java_git_artdeell_dnbootstrap_glfw_GLFW_nativeSurfaceDestroyed(JNIEnv *env,
                                                                             jclass clazz) {
@@ -522,7 +544,7 @@ index 74746323..ca2a9913 100644
  }
  
  JNIEXPORT void JNICALL
-@@ -1496,13 +1570,38 @@ Java_git_artdeell_dnbootstrap_glfw_GLFW_sendMouseEvent(JNIEnv *env, jclass clazz
+@@ -1496,13 +1579,38 @@ Java_git_artdeell_dnbootstrap_glfw_GLFW_sendMouseEvent(JNIEnv *env, jclass clazz
  JNIEXPORT void JNICALL
  Java_git_artdeell_dnbootstrap_glfw_GLFW_sendBulkUnicodeEvent(JNIEnv *env, jclass clazz,
                                                               jstring input, jint mods) {
@@ -564,3 +586,34 @@ index 74746323..ca2a9913 100644
              .u.mods = mods,
              .u.codepoints = codepoints
      };
+diff --git a/src/egl_context.c b/src/egl_context.c
+index 2088e850..9ad65706 100644
+--- a/src/egl_context.c
++++ b/src/egl_context.c
+@@ -295,11 +295,17 @@ static void swapBuffersEGL(_GLFWwindow* window)
+                         "EGL: The context must be current on the calling thread when swapping buffers");
+         return;
+     }
++    EGLSurface surface = window->context.egl.surface;
+ #if defined(_GLFW_ANDROID)
+     if (_glfw.platform.platformID == GLFW_PLATFORM_ANDROID)
+     {
+         if(_glfwSwapBuffersAttentionEglAndroid(window))
+             makeContextCurrentEGL(window);
++        // Read under the lock, because the surface can be destroyed on another thread at any time.
++        surface = _glfwSwapSurfaceAndroid(window);
++        // No surface for this frame. The next surface callback restores one, so there is nothing to swap.
++        if (surface == EGL_NO_SURFACE)
++            return;
+     }
+ #endif
+ 
+@@ -321,7 +327,7 @@ static void swapBuffersEGL(_GLFWwindow* window)
+     }
+ #endif
+ 
+-    eglSwapBuffers(_glfw.egl.display, window->context.egl.surface);
++    eglSwapBuffers(_glfw.egl.display, surface);
+ }
+ 
+ static void swapIntervalEGL(int interval)

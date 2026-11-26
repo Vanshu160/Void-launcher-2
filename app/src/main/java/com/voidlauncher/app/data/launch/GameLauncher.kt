@@ -70,15 +70,12 @@ class GameLauncher(private val context: Context) {
 
         // GL4ES cannot provide the OpenGL 3.2 core that newer Minecraft needs. Stop here, before any native
         // library loads or the JVM starts, instead of letting Minecraft fail with an OpenGL error later.
-        val releaseTime = json.optString("releaseTime")
-        val gl4esSupported = Gl4esRenderer.supportsVersion(releaseTime)
-        AppLog.write("Minecraft release time: ${releaseTime.ifBlank { "unknown" }}. GL4ES supports it: ${gl4esSupported ?: "unknown (allowed)"}")
-        if (gl4esSupported == false) {
+        val releaseTime = json.optString("releaseTime").ifBlank { null }
+        val blockReason = Gl4esRenderer.blockReason(versionId, releaseTime)
+        AppLog.write("Minecraft release time: ${releaseTime ?: "missing"}. GL4ES block: ${blockReason ?: "none"}")
+        if (blockReason != null) {
             // "Launch failed" is the prefix DownloadsViewModel uses to end the busy state.
-            report(
-                "Launch failed: Minecraft $versionId needs OpenGL 3.2, which the GL4ES renderer (OpenGL 2.1) " +
-                    "cannot provide. Choose a version released before 7 January 2025, such as 1.21.4.",
-            )
+            report("Launch failed: $blockReason")
             return
         }
 
