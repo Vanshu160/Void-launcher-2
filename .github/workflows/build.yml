@@ -127,12 +127,17 @@ jobs:
           EGL_SYMBOLS="eglGetProcAddress eglGetDisplay eglInitialize eglChooseConfig eglCreateContext eglCreateWindowSurface eglMakeCurrent eglSwapBuffers eglDestroyContext eglTerminate"
           for lib in libng_gl4es.so libgl4es_114.so; do
             exports=$(readelf --dyn-syms -W "$TMP/lib/arm64-v8a/$lib" | awk '$7 != "UND" {print $8}' | sed 's/@.*//')
+            missing=""
             for sym in $EGL_SYMBOLS; do
-              if ! printf '%s\n' "$exports" | grep -qx "$sym"; then
-                echo "::error::$lib does not export $sym"
-                exit 1
+              # A here-string instead of a pipe: grep -q exits on the first match, which would break a pipe.
+              if ! grep -qx "$sym" <<< "$exports"; then
+                missing="$missing $sym"
               fi
             done
+            if [ -n "$missing" ]; then
+              echo "::error::$lib does not export:$missing"
+              exit 1
+            fi
             echo "$lib exports all required EGL entry points"
           done
           rm -rf "$TMP"
