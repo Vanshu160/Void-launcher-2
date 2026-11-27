@@ -49,7 +49,8 @@ jobs:
             assets/licenses/ng-gl4es-LICENSE.txt \
             assets/licenses/ng-gl4es-bundled-notices.txt \
             assets/licenses/glslang-LICENSE.txt \
-            assets/licenses/SPIRV-Cross-LICENSE.txt; do
+            assets/licenses/SPIRV-Cross-LICENSE.txt \
+            assets/licenses/khronos-notices.txt; do
             if ! printf '%s\n' "$ENTRIES" | grep -qxF "$entry"; then
               echo "::error::$entry is missing from the APK"
               exit 1
@@ -79,9 +80,48 @@ jobs:
           }
           check_sha assets/licenses/gl4es-LICENSE.txt 69a3049c77abd88658f6ad7cf6a5b6ceb5cf03b80e60f7c4657d90322cfab7bd
           check_sha assets/licenses/ng-gl4es-LICENSE.txt 51c5b405e035a85462b5211dff42b111dbcf028788327597e69b953d610e9d30
-          check_sha assets/licenses/ng-gl4es-bundled-notices.txt fc34893bf0dd56b384efe0f95098b4f85509b12774f023b8b24aa462cd35f3f5
+          check_sha assets/licenses/ng-gl4es-bundled-notices.txt e1b96fde8065a02ba593e6c0218d6d409f40a85a0fdc36b80314db400d54d69b
           check_sha assets/licenses/glslang-LICENSE.txt 17e70c676e1521ff3e4686f04a2053d93a7e28a33be8de7ec37ab0ff72feb677
           check_sha assets/licenses/SPIRV-Cross-LICENSE.txt cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30
+          check_sha assets/licenses/khronos-notices.txt 5eed77569da155fb3d9dbb886f33bf56171f5745409a459fea7370d90d78184c
+
+          # Symbols. The unstripped libng_gl4es.so from this build (uploaded as void-launcher-native-symbols) must
+          # have a symbol table and the same GNU build-id as the APK copy, so a crash offset maps to the right build.
+          # libgl4es_114.so is a prebuilt jniLibs file, so this build does not produce an unstripped copy of it.
+          has_symtab() {
+            local sections
+            sections=$(readelf -S "$1")
+            case "$sections" in
+              *"] .symtab "*) return 0 ;;
+            esac
+            return 1
+          }
+          build_id() {
+            readelf -n "$1" | awk '/Build ID:/ {print $3}'
+          }
+          lib=libng_gl4es.so
+          apk_copy="$TMP/lib/arm64-v8a/$lib"
+          if has_symtab "$apk_copy"; then
+            echo "::warning::$lib in the APK still has a symbol table. The APK copy is not stripped."
+          else
+            echo "$lib in the APK is stripped"
+          fi
+          obj=$(find app/build/intermediates -path "*/obj/arm64-v8a/$lib" | head -n 1)
+          if [ -z "$obj" ]; then
+            echo "::error::unstripped $lib was not found in the build output"
+            exit 1
+          fi
+          if ! has_symtab "$obj"; then
+            echo "::error::$obj has no symbol table"
+            exit 1
+          fi
+          apk_id=$(build_id "$apk_copy")
+          obj_id=$(build_id "$obj")
+          if [ -z "$obj_id" ] || [ "$apk_id" != "$obj_id" ]; then
+            echo "::error::$lib build-id differs: APK '$apk_id', unstripped '$obj_id'"
+            exit 1
+          fi
+          echo "Unstripped $lib: $obj, build-id $obj_id, matches the APK copy"
           rm -rf "$TMP"
 
       - uses: actions/upload-artifact@v7

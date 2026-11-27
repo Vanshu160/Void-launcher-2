@@ -81,6 +81,17 @@ object GameSurfaceBridge {
     fun beginGame() {
         launchReady = CountDownLatch(1)
         cancelRequested = false
+        // A surface forwarded by an earlier launch that was cancelled before Minecraft started is still held by
+        // GLFW, and forwardIfPossible would skip it. Release it here, so this launch forwards the surface again.
+        glfwThread.execute {
+            if (forwarded) {
+                forwarded = false
+                inputReady = false
+                forwardedState.value = false
+                AppLog.write("Releasing a rendering surface left by an earlier launch.")
+                GLFW.nativeSurfaceDestroyed()
+            }
+        }
         // Called from the launch thread. GameInput's state belongs to the main thread, so the reset is posted there.
         GameInput.resetFromAnyThread()
         GLFW.setGrabListener { isGrabbing -> GameInput.onGameGrabState(isGrabbing) }
@@ -122,6 +133,7 @@ object GameSurfaceBridge {
     /** Called on the UI thread when a TextureView surface becomes available. Width and height are the buffer size. */
     fun onSurfaceCreated(texture: SurfaceTexture, width: Int, height: Int) {
         uiTexture = texture
+        AppLog.write("Game surface created: ${width}x$height")
         GameInput.setWindowSize(width, height)
         val holder = Holder(Surface(texture), texture)
         glfwThread.execute {
@@ -150,6 +162,7 @@ object GameSurfaceBridge {
         // texture must not stop input for the surface that replaced it.
         if (uiTexture === texture) {
             uiTexture = null
+            AppLog.write("Game surface destroyed")
             // Release held buttons while GLFW can still receive them, then stop routing input. The grab state is
             // kept: Minecraft still holds the cursor across a surface change, such as rotation.
             GameInput.releaseHeld()

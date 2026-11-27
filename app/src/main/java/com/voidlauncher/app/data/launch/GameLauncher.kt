@@ -27,6 +27,13 @@ class GameLauncher(private val context: Context) {
     private companion object {
         /** How long to wait for the game screen to hand its surface to GLFW before giving up. */
         const val SURFACE_TIMEOUT_MS = 20_000L
+
+        /**
+         * Set when the JVM thread starts. A process can start the JVM only once, so later launches are refused.
+         * It is process-wide, because each launch may come from a new GameLauncher instance.
+         */
+        @Volatile
+        private var jvmStarted = false
     }
 
     /** Loads the native libraries. Throws UnsatisfiedLinkError if they are missing from the APK. */
@@ -68,6 +75,13 @@ class GameLauncher(private val context: Context) {
             GameSurfaceBridge.reportStatus(message)
             onStatus(message)
         }
+        // The JVM can start only once per process. Refuse before anything else changes.
+        if (jvmStarted) {
+            report("Launch failed: Minecraft already started in this app session. Restart Void Launcher to play again.")
+            return
+        }
+        // Allows for coarse file timestamps when looking for this launch's crash reports and game log.
+        val startedAt = System.currentTimeMillis() - 2_000L
         val metaFile = File(minecraftRoot, "versions/$versionId/$versionId.json")
         check(metaFile.isFile) { "Game files for $versionId are not downloaded." }
         val json = JSONObject(metaFile.readText())
@@ -182,6 +196,11 @@ class GameLauncher(private val context: Context) {
 
         report("Loading native libraries...")
         loadNative()
+        // Installed before the renderer loads, so the renderer's own output and any native crash are captured.
+        // It truncates the native output file, so it runs once per launch.
+        AppLog.beginNativeOutput()
+        NativeBridge.installCrashLog(AppLog.path())
+        AppLog.write("Native crash catcher installed")
 
         // Same environment the PojavLauncher JVM expects. It is set before the renderer loads, because GL4ES
         // reads its LIBGL_* variables at load time. PojavLauncher's GameRenderer does the same order.
@@ -198,6 +217,9 @@ class GameLauncher(private val context: Context) {
         Os.setenv("TMPDIR", context.cacheDir.absolutePath, true)
         Os.setenv("LD_LIBRARY_PATH", ldPath, true)
         JREUtils.setLdLibraryPath(ldPath)
+        // Clear the variables that belong to other renderers, so this launch sees only its own settings.
+        val ownKeys = Gl4esRenderer.environment(renderer).keys
+        for (key in Gl4esRenderer.allEnvironmentKeys() - ownKeys) Os.unsetenv(key)
         Gl4esRenderer.environment(renderer).forEach { (key, value) -> Os.setenv(key, value, true) }
         // Read back what the process will see, so the log proves the renderer settings were applied.
         for (key in Gl4esRenderer.environment(renderer).keys) {
@@ -208,7 +230,10 @@ class GameLauncher(private val context: Context) {
         // The renderer must be loaded before the JVM starts. Without it GLFW cannot find an OpenGL
         // EGL config and window creation fails with "EGL: Failed to find support for OpenGL".
         report("Loading the OpenGL renderer...")
-        if (!Gl4esRenderer.prepare(nativeDir, renderer) { AppLog.write(it) }) {
+        val rendererLoaded = Gl4esRenderer.prepare(nativeDir, renderer) { AppLog.write(it) }
+        AppLog.importNativeOutput()
+        if (!rendererLoaded) {
+            AppLog.copySystemLog()
             report("Launch failed: OpenGL renderer failed to load. See the log for details.")
             return
         }
@@ -243,11 +268,10 @@ class GameLauncher(private val context: Context) {
         AppLog.write("Rendering surface ready. Starting the JVM.")
 
         report("Starting Java ${spec.majorVersion} and Minecraft $versionId...")
+        jvmStarted = true
         Thread(null, {
             try {
                 AppLog.write("JVM thread started")
-                NativeBridge.installCrashLog(AppLog.path())
-                AppLog.write("Native crash catcher installed")
 
                 // Minecraft writes its logs to a relative folder, so start from the game folder.
                 try {
@@ -272,8 +296,32 @@ class GameLauncher(private val context: Context) {
             } finally {
                 // The game has stopped. Hide the surface, and stop forwarding to GLFW so the teardown cannot wait.
                 GameSurfaceBridge.endGame()
+                collectDiagnostics(startedAt)
             }
         }, "minecraft-jvm", 64L * 1024 * 1024).start()
+    }
+
+    /**
+     * Copies what explains how the game stopped into the log: native output, the system log, Minecraft's own
+     * log, and any crash report written since this launch started. Runs after the JVM returns.
+     * A native crash that kills the process skips this; the native crash catcher and the JVM error file cover that case.
+     */
+    private fun collectDiagnostics(startedAt: Long) {
+        AppLog.importNativeOutput()
+        AppLog.copySystemLog()
+        val gameLog = File(gameDir, "logs/latest.log")
+        if (gameLog.isFile && gameLog.lastModified() >= startedAt) {
+            AppLog.copyFileTail("Minecraft log", gameLog)
+        } else {
+            AppLog.write("Minecraft log: logs/latest.log was not written during this launch")
+        }
+        val crash = File(gameDir, "crash-reports").listFiles { f -> f.isFile && f.lastModified() >= startedAt }
+            ?.maxByOrNull { it.lastModified() }
+        if (crash != null) {
+            AppLog.copyFileTail("Minecraft crash report", crash)
+        } else {
+            AppLog.write("No Minecraft crash report was written during this launch")
+        }
     }
 
     private fun substitute(text: String, values: Map<String, String>): String {

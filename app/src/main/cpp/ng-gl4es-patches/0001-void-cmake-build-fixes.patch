@@ -1,7 +1,16 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index c0a2433..c15e4d6 100644
+index c0a2433..f174f57 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
+@@ -10,7 +10,7 @@ project(ng_gl4es)
+     endif()
+ 
+     if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+-        add_compile_options(-g0 -O3 -ffunction-sections -fdata-sections)
++        add_compile_options(-g1 -O3 -ffunction-sections -fdata-sections)
+         add_link_options(-Wl,--gc-sections)
+     elseif (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+         add_compile_options(/O2 /GL)
 @@ -57,7 +57,7 @@ if(ANDROID)
      set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DNOX11")
  endif()
@@ -48,6 +57,7 @@ index c0a2433..c15e4d6 100644
  )
  
 -set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES
+-    LINK_FLAGS "-Wl,--strip-all"
 +set_target_properties(ng_gl4es PROPERTIES
-     LINK_FLAGS "-Wl,--strip-all"
++    LINK_FLAGS ""
  )

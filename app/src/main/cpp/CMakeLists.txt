@@ -69,14 +69,15 @@ target_link_libraries(SDL3-shared PRIVATE mojoexec)
 # ------ NG-GL4ES (MIT), pinned, built from source for ARM64 ------
 # NG-GL4ES pins glslang and SPIRV-Cross as its own submodules. GIT_SUBMODULES fetches exactly those two.
 # The patch changes NG-GL4ES's CMAKE_SOURCE_DIR and CMAKE_PROJECT_NAME uses, which would point at this project
-# in a subdirectory build. Both libraries are linked statically into libng_gl4es.so. BUILD_SHARED_LIBS is ON
+# in a subdirectory build. It also builds with -g1 and drops NG-GL4ES's --strip-all link flag, so the unstripped
+# copy keeps its symbols (the APK copy is stripped by the Android build; see THIRD_PARTY.md). Both libraries are linked statically into libng_gl4es.so. BUILD_SHARED_LIBS is ON
 # for GLFW and SDL above, so it is forced OFF here, for this subtree only.
 FetchContent_Declare(
     ng_gl4es
     GIT_REPOSITORY https://github.com/BZLZHH/NG-GL4ES.git
     GIT_TAG 6e153a1622a8d9ef903f7975aafbef2453571bab
     GIT_SUBMODULES "3rdparty/glslang;3rdparty/SPIRV-Cross"
-    PATCH_COMMAND git apply --whitespace=nowarn "${CMAKE_CURRENT_SOURCE_DIR}/ng-gl4es-patches/0001-void-cmake-source-and-target-paths.patch"
+    PATCH_COMMAND git apply --whitespace=nowarn "${CMAKE_CURRENT_SOURCE_DIR}/ng-gl4es-patches/0001-void-cmake-build-fixes.patch"
 )
 set(BUILD_SHARED_LIBS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)

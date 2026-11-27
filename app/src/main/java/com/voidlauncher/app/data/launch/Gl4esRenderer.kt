@@ -126,6 +126,9 @@ object Gl4esRenderer {
         GlRenderer.NG_GL4ES -> NG_GL4ES_ENV
     }
 
+    /** Every variable any renderer sets. Launches clear the ones their renderer does not use. */
+    fun allEnvironmentKeys(): Set<String> = GlRenderer.entries.flatMap { environment(it).keys }.toSet()
+
     /**
      * Returns the reason [renderer] cannot be used in this process, or null if it can. A different renderer
      * already loaded means the app must restart before the new one can load.
@@ -159,13 +162,32 @@ object Gl4esRenderer {
         MojoExec.setNativeLibraryDir(nativeLibDir.absolutePath)
         // The renderer reads its environment variables when it loads, so they must be set before this call.
         log("Loading ${renderer.label} on thread ${Thread.currentThread().name} (id ${Thread.currentThread().id})")
+        log("Library ${library.absolutePath}: ${fingerprint(library)}. GLES version ${renderer.glesVersion}.")
         val ok = MojoExec.prepareEgl(library.absolutePath, false, true, renderer.glesVersion)
         if (ok) {
-            log("${renderer.label} renderer loaded from ${library.absolutePath}")
+            // This only says the library and its EGL hook loaded. It does not prove that a window or OpenGL
+            // context can be created. Those are reported when Minecraft creates its window.
+            log("Library loaded: ${renderer.label}. Window and OpenGL status is logged when the game creates its window.")
             loaded = renderer
         } else {
             log("${renderer.label} renderer failed to load from ${library.absolutePath}. EGL/OpenGL will not be available.")
         }
         return ok
+    }
+
+    /** File size and SHA-256 of the library, so a log shows exactly which build was loaded. */
+    private fun fingerprint(file: File): String = try {
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                digest.update(buffer, 0, read)
+            }
+        }
+        "${file.length()} bytes, sha256 " + digest.digest().joinToString("") { "%02x".format(it) }
+    } catch (e: Exception) {
+        "${file.length()} bytes, hash unavailable (${e.message ?: e.javaClass.simpleName})"
     }
 }
