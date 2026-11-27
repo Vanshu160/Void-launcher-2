@@ -122,6 +122,19 @@ jobs:
             exit 1
           fi
           echo "Unstripped $lib: $obj, build-id $obj_id, matches the APK copy"
+          # EGL entry points. GLFW gets eglGetProcAddress from the renderer library and loads the rest by name. A library
+          # missing any of these fails at window creation, so each one must be exported (defined) in the APK copy.
+          EGL_SYMBOLS="eglGetProcAddress eglGetDisplay eglInitialize eglChooseConfig eglCreateContext eglCreateWindowSurface eglMakeCurrent eglSwapBuffers eglDestroyContext eglTerminate"
+          for lib in libng_gl4es.so libgl4es_114.so; do
+            exports=$(readelf --dyn-syms -W "$TMP/lib/arm64-v8a/$lib" | awk '$7 != "UND" {print $8}' | sed 's/@.*//')
+            for sym in $EGL_SYMBOLS; do
+              if ! printf '%s\n' "$exports" | grep -qx "$sym"; then
+                echo "::error::$lib does not export $sym"
+                exit 1
+              fi
+            done
+            echo "$lib exports all required EGL entry points"
+          done
           rm -rf "$TMP"
 
       - uses: actions/upload-artifact@v7

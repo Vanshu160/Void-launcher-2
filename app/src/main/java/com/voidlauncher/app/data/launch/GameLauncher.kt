@@ -268,6 +268,9 @@ class GameLauncher(private val context: Context) {
         AppLog.write("Rendering surface ready. Starting the JVM.")
 
         report("Starting Java ${spec.majorVersion} and Minecraft $versionId...")
+        // The native exit handler needs the JVM and its exit class before the game can abort or exit. PojavLauncher's
+        // GameRunner calls this before startJvm for the same reason.
+        JavaRunner.nativeSetupExit(context)
         jvmStarted = true
         Thread(null, {
             try {

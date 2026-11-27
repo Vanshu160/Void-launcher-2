@@ -77,7 +77,7 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/BZLZHH/NG-GL4ES.git
     GIT_TAG 6e153a1622a8d9ef903f7975aafbef2453571bab
     GIT_SUBMODULES "3rdparty/glslang;3rdparty/SPIRV-Cross"
-    PATCH_COMMAND git apply --whitespace=nowarn "${CMAKE_CURRENT_SOURCE_DIR}/ng-gl4es-patches/0001-void-cmake-build-fixes.patch"
+    PATCH_COMMAND git apply --whitespace=nowarn "${CMAKE_CURRENT_SOURCE_DIR}/ng-gl4es-patches/0001-void-cmake-build-fixes.patch" "${CMAKE_CURRENT_SOURCE_DIR}/ng-gl4es-patches/0002-void-cmake-egl-sources.patch"
 )
 set(BUILD_SHARED_LIBS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
