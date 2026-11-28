@@ -1,0 +1,619 @@
+diff --git a/src/android_egl_context_hook.h b/src/android_egl_context_hook.h
+index e7f5fe6c..b0a9673e 100644
+--- a/src/android_egl_context_hook.h
++++ b/src/android_egl_context_hook.h
+@@ -13,6 +13,8 @@
+ EGLSurface _glfwManageEglSurfaceAndroid(_GLFWwindow*);
+ // Check if the surface has been changed before attempting to swap buffers
+ GLFWbool _glfwSwapBuffersAttentionEglAndroid(_GLFWwindow*);
++// The window's EGLSurface, read under the same lock that the surface-destroy callback takes
++EGLSurface _glfwSwapSurfaceAndroid(_GLFWwindow*);
+ 
+ void* _glfwLoadEglAndroid(void);
+ 
+diff --git a/src/android_input_queue.c b/src/android_input_queue.c
+index b9fc32fc..0c0964fc 100644
+--- a/src/android_input_queue.c
++++ b/src/android_input_queue.c
+@@ -1,15 +1,43 @@
+ //
+ // Created by maks on 11.04.2026.
+ //
++// Thread-safe double-buffered input queue.
++//
++// Producers call _input_queue_push from any thread. Each push takes wait_mutex, appends to the active
++// buffer and signals the waiter. The single consumer (the GLFW event thread) calls _input_queue_dequeue,
++// which swaps the active buffer under wait_mutex and then runs the callbacks with the lock released.
++// Callbacks therefore never block producers, and producers never write into the buffer being consumed.
++//
++// Ordering: events are delivered in push order within one buffer generation, and generations are
++// consumed in order because only one consumer exists.
++//
++// Overflow: when the active buffer is full, mouse position events are dropped (the next position replaces
++// them). Any other event is dropped only as a last resort, and the drop is logged. Text payloads are freed
++// when their event is dropped.
+ 
++#include <errno.h>
++#include <stdlib.h>
+ #include <string.h>
+ #include <stdatomic.h>
++#include <android/log.h>
+ 
+ #include "android_input_queue.h"
+ 
++#define QUEUE_LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "android_input_queue", __VA_ARGS__)
++
++static void free_event_payload(input_event_t *ev) {
++    if (ev->type == INPUT_EVENT_TYPE_UNICODE_CHARS) free(ev->u.codepoints);
++}
++
++static bool queue_has_events_locked(const queue_top_t *top) {
++    return top->queues[top->index].count != 0;
++}
++
+ bool _input_queue_init(queue_top_t* top) {
+     top->index = 0;
+-    for(int i = 0; i < 2; i++) top->queues[i].events_total = 0;
++    top->wakeup = false;
++    top->dropped = 0;
++    for(int i = 0; i < 2; i++) top->queues[i].count = 0;
+     if(pthread_mutex_init(&top->wait_mutex, NULL) != 0) return false;
+ 
+     pthread_condattr_t attr;
+@@ -33,43 +61,77 @@ void _input_queue_destroy(queue_top_t* top) {
+ }
+ 
+ void _input_queue_wait_unlock(queue_top_t* top) {
++    pthread_mutex_lock(&top->wait_mutex);
++    top->wakeup = true;
+     pthread_cond_broadcast(&top->wait_cond);
++    pthread_mutex_unlock(&top->wait_mutex);
+ }
+ 
+ void _input_queue_push(queue_top_t* top, input_event_t* event) {
+-    queue_t *current = &top->queues[atomic_load(&top->index)];
+-    uint16_t ev_idx = atomic_fetch_add(&current->events_total, 1);
+-    input_event_t *put_event = &current->events[ev_idx];
+-    memcpy(put_event, event, sizeof(input_event_t));
++    pthread_mutex_lock(&top->wait_mutex);
++    queue_t *current = &top->queues[top->index];
++    if(event->type == INPUT_EVENT_TYPE_MOUSE_POS && current->count > 0) {
++        // Consecutive position events replace each other, so fast movement cannot fill the buffer
++        // and push out button or key events. Only the last queued event is merged, so order is kept.
++        input_event_t *last = &current->events[current->count - 1];
++        if(last->type == INPUT_EVENT_TYPE_MOUSE_POS) {
++            last->p = event->p;
++            pthread_cond_broadcast(&top->wait_cond);
++            pthread_mutex_unlock(&top->wait_mutex);
++            return;
++        }
++    }
++    if(current->count < INPUT_QUEUE_CAPACITY) {
++        current->events[current->count++] = *event;
++    } else if(event->type == INPUT_EVENT_TYPE_MOUSE_POS) {
++        top->dropped++;
++    } else {
++        top->dropped++;
++        QUEUE_LOGE("input queue full, dropping event type %d (total dropped %u)", event->type, top->dropped);
++        free_event_payload(event);
++    }
+     pthread_cond_broadcast(&top->wait_cond);
++    pthread_mutex_unlock(&top->wait_mutex);
+ }
+ 
+ void _input_queue_dequeue(queue_top_t* top, dequeue_callback_t cb) {
+-    // Atomically switch queue 0 to 1 (or 1 to 0) by flipping the bit
+-    queue_t *current = &top->queues[atomic_fetch_xor(&top->index, 0b1)];
+-    for(uint16_t i = 0; i < current->events_total; i++) {
+-        cb(&current->events[i]);
++    pthread_mutex_lock(&top->wait_mutex);
++    queue_t *batch = &top->queues[top->index];
++    if(batch->count == 0) {
++        pthread_mutex_unlock(&top->wait_mutex);
++        return;
+     }
+-    current->events_total = 0;
++    // From here on producers write into the other buffer, which is already empty.
++    top->index ^= 1;
++    uint32_t total = batch->count;
++    pthread_mutex_unlock(&top->wait_mutex);
++
++    for(uint32_t i = 0; i < total; i++) {
++        cb(&batch->events[i]);
++    }
++
++    // The batch is no longer used. It becomes writable again on the next swap, which only this thread performs.
++    pthread_mutex_lock(&top->wait_mutex);
++    batch->count = 0;
++    pthread_mutex_unlock(&top->wait_mutex);
+ }
+ 
+ void _input_queue_timedwait(queue_top_t* top, dequeue_callback_t cb, struct timespec* timeout) {
+-    queue_t *current = &top->queues[top->index];
+-    if(current->events_total == 0) {
+-        pthread_mutex_lock(&top->wait_mutex);
+-        pthread_cond_timedwait(&top->wait_cond, &top->wait_mutex, timeout);
+-        pthread_mutex_unlock(&top->wait_mutex);
++    pthread_mutex_lock(&top->wait_mutex);
++    while(!queue_has_events_locked(top) && !top->wakeup) {
++        if(pthread_cond_timedwait(&top->wait_cond, &top->wait_mutex, timeout) == ETIMEDOUT) break;
+     }
++    top->wakeup = false;
++    pthread_mutex_unlock(&top->wait_mutex);
+     _input_queue_dequeue(top, cb);
+ }
+ 
+ void _input_queue_wait(queue_top_t* top, dequeue_callback_t cb) {
+-    queue_t *current = &top->queues[top->index];
+-    if(current->events_total == 0) {
+-        pthread_mutex_lock(&top->wait_mutex);
++    pthread_mutex_lock(&top->wait_mutex);
++    while(!queue_has_events_locked(top) && !top->wakeup) {
+         pthread_cond_wait(&top->wait_cond, &top->wait_mutex);
+-        pthread_mutex_unlock(&top->wait_mutex);
+     }
++    top->wakeup = false;
++    pthread_mutex_unlock(&top->wait_mutex);
+     _input_queue_dequeue(top, cb);
+ }
+-
+diff --git a/src/android_input_queue.h b/src/android_input_queue.h
+index 8c5fe787..c847fc4e 100644
+--- a/src/android_input_queue.h
++++ b/src/android_input_queue.h
+@@ -1,6 +1,10 @@
+ //
+ // Created by maks on 11.04.2026.
+ //
++// Thread-safe input queue. Producers (Android UI thread, JVM threads) push events under
++// wait_mutex. The single consumer (GLFW event thread) swaps the active buffer under the same lock
++// and runs the event callbacks with the lock released.
++//
+ 
+ #ifndef POJAVLAUNCHER_ANDROID_INPUT_QUEUE_H
+ #define POJAVLAUNCHER_ANDROID_INPUT_QUEUE_H
+@@ -9,27 +13,38 @@
+ #include <jni.h>
+ #include <pthread.h>
+ #include <stdbool.h>
++#include <time.h>
++
++#define INPUT_QUEUE_CAPACITY 4096
++
++// Event types the queue needs to recognise. They must match the GLFW_ANDROID_EVENT_TYPE_* values in android_window.c.
++#define INPUT_EVENT_TYPE_UNICODE_CHARS 4
++#define INPUT_EVENT_TYPE_MOUSE_POS 7
+ 
+ typedef struct {
+     int32_t type;
+     union {
+         struct { int32_t glfw_code, code, state, mods; jchar codepoint; } k;
+         struct { int32_t button, state, mods; } m;
+-        struct { int32_t length, mods; jchar *codepoints; } u;
++        struct { int32_t length, mods; uint32_t *codepoints; } u;
+         struct { double xscroll, yscroll; } s;
++        struct { double x, y; } p;
+     };
+ } input_event_t;
+ 
+ typedef struct {
+-    _Atomic uint16_t events_total;
+-    input_event_t events[512];
++    uint32_t count;
++    input_event_t events[INPUT_QUEUE_CAPACITY];
+ } queue_t;
+ 
+ typedef struct {
+     pthread_mutex_t wait_mutex;
+     pthread_cond_t wait_cond;
+     queue_t queues[2];
+-    _Atomic unsigned char index;
++    // Both fields below are only accessed with wait_mutex held.
++    unsigned char index;
++    bool wakeup;
++    uint32_t dropped;
+ } queue_top_t;
+ 
+ typedef void (*dequeue_callback_t)(input_event_t*);
+diff --git a/src/android_window.c b/src/android_window.c
+index 74746323..49f9a3f6 100644
+--- a/src/android_window.c
++++ b/src/android_window.c
+@@ -57,6 +57,7 @@
+ #define GLFW_ANDROID_EVENT_TYPE_UNICODE_CHARS 4
+ #define GLFW_ANDROID_EVENT_TYPE_MOUSE_SCROLL 5
+ #define GLFW_ANDROID_EVENT_TYPE_JOYSTICK_STATE 6
++#define GLFW_ANDROID_EVENT_TYPE_MOUSE_POS INPUT_EVENT_TYPE_MOUSE_POS
+ 
+ #define FLAG_MOUSE_POS (1 >> 0)
+ #define FLAG_APP_FOCUS (1 >> 1)
+@@ -101,16 +102,17 @@ static queue_top_t input_queue;
+ 
+ static void ensure_comm_connected() {
+     if(jni_tl.attached) return;
+-    JNIEnv *env;
+-    jint error = (*jni.vm)->GetEnv(jni.vm, (void**)&env, JNI_VERSION_1_6);
++    // The JNI API takes void**, so the environment is read through a void* and converted afterwards.
++    void *penv = NULL;
++    jint error = (*jni.vm)->GetEnv(jni.vm, &penv, JNI_VERSION_1_6);
+     if(error == JNI_EDETACHED) {
+-        error = (*jni.vm)->AttachCurrentThreadAsDaemon(jni.vm, &env, NULL);
++        error = (*jni.vm)->AttachCurrentThreadAsDaemon(jni.vm, &penv, NULL);
+     }
+     if(error != JNI_OK) {
+         LOGE("JNI connection failed: %i", error);
+         abort();
+     }
+-    jni_tl.env = env;
++    jni_tl.env = (JNIEnv*) penv;
+     jni_tl.attached = true;
+ }
+ 
+@@ -236,8 +238,17 @@ extern void _glfwUpdateJoystickConnectSate(void);
+ 
+ static void android_dequeue_event(input_event_t* evp) {
+     input_event_t event = *evp;
+-    if(surfaceOwner == NULL) return;
++    if(surfaceOwner == NULL) {
++        // Nothing can consume the event, but its text payload must still be freed.
++        if(event.type == GLFW_ANDROID_EVENT_TYPE_UNICODE_CHARS) free(event.u.codepoints);
++        return;
++    }
+     switch (event.type) {
++        case GLFW_ANDROID_EVENT_TYPE_MOUSE_POS:
++            _glfw.android.xcursor = event.p.x;
++            _glfw.android.ycursor = event.p.y;
++            _glfwInputCursorPos(surfaceOwner, event.p.x, event.p.y);
++            break;
+         case GLFW_ANDROID_EVENT_TYPE_EMPTY:
+             break;
+         case GLFW_ANDROID_EVENT_TYPE_KEYBOARD_KEY:
+@@ -790,22 +801,39 @@ GLFWbool _glfwWindowVisibleAndroid(_GLFWwindow* window)
+     return window->android.visible;
+ }
+ 
+-void updateNativeWindowDimensions(_GLFWwindow* window) {
++// Reads the native window size into width and height. Requires nw_egl_mutex, and nativeWindow must not be NULL.
++static void readNativeWindowSizeLocked(_GLFWwindow* window, int* width, int* height) {
+     // This is incredibly cringe, but...
+     // When we set W/H in the buffer geometry to 0,0, we reset the ANW to its default dimensions
+     // Therefore, we also don't change its dimensions (which breaks vulkan swapchains)
+     ANativeWindow_setBuffersGeometry(nativeWindow, 0, 0, window->android.visualId);
+-    int width = ANativeWindow_getWidth(nativeWindow);
+-    int height = ANativeWindow_getHeight(nativeWindow);
+-    LOGI("Update window dimensions: %i %i", width, height);
+-    window->android.width = width;
+-    window->android.height = height;
++    *width = ANativeWindow_getWidth(nativeWindow);
++    *height = ANativeWindow_getHeight(nativeWindow);
++    window->android.width = *width;
++    window->android.height = *height;
+     surfaceUpdated = false;
++}
+ 
++// Passes a new size to GLFW. Called with no lock held, because GLFW callbacks into the game run here.
++static void reportWindowSize(_GLFWwindow* window, int width, int height) {
++    LOGI("Update window dimensions: %i %i", width, height);
+     _glfwInputWindowSize(window, width, height);
+     _glfwInputFramebufferSize(window, width, height);
+ }
+ 
++void updateNativeWindowDimensions(_GLFWwindow* window) {
++    if (window == NULL) return;
++    int width = 0, height = 0;
++    pthread_mutex_lock(&nw_egl_mutex);
++    if (nativeWindow == NULL) {
++        pthread_mutex_unlock(&nw_egl_mutex);
++        return;
++    }
++    readNativeWindowSizeLocked(window, &width, &height);
++    pthread_mutex_unlock(&nw_egl_mutex);
++    reportWindowSize(window, width, height);
++}
++
+ void _glfwPollEventsAndroid(void)
+ {
+     process_flag_bits();
+@@ -1016,62 +1044,71 @@ int _glfwGetIMEStatusAndroid(_GLFWwindow* window)
+     return GLFW_FALSE;
+ }
+ 
+-// Select a new EGLSurface
++// Select a new EGLSurface. Runs on the GL thread.
++//
++// nw_egl_mutex is held for the whole switch, so nativeSurfaceDestroyed can never release the ANativeWindow
++// while a window surface is being created from it. No GLFW callback runs while the lock is held.
+ EGLSurface _glfwManageEglSurfaceAndroid(_GLFWwindow* window) {
+-    int wantedMode = GLFW_ANDROID_WINDOW_MODE_UNDEFINED;
+-    int currentMode = window->android.mode;
+-    if (window != surfaceOwner || surfaceDestroyed) wantedMode = GLFW_ANDROID_WINDOW_MODE_PBUFFER;
+-    else wantedMode = GLFW_ANDROID_WINDOW_MODE_SURFACE;
++    EGLSurface result;
++    int newWidth = 0, newHeight = 0;
++    bool sizeChanged = false;
+ 
+-    if (currentMode != wantedMode) {
+-        EGLSurface oldSurface = window->context.egl.surface;
++    pthread_mutex_lock(&nw_egl_mutex);
++    int currentMode = window->android.mode;
++    int wantedMode = GLFW_ANDROID_WINDOW_MODE_PBUFFER;
++    if (window == surfaceOwner && !surfaceDestroyed && nativeWindow != NULL) wantedMode = GLFW_ANDROID_WINDOW_MODE_SURFACE;
+ 
+-        eglMakeCurrent(_glfw.egl.display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+-        if (oldSurface != EGL_NO_SURFACE) {
+-            eglDestroySurface(_glfw.egl.display, oldSurface);
+-        }
++    if (currentMode == wantedMode) {
++        result = window->context.egl.surface;
++        pthread_mutex_unlock(&nw_egl_mutex);
++        return result;
++    }
+ 
+-        if (currentMode == GLFW_ANDROID_WINDOW_MODE_SURFACE) {
+-            pthread_mutex_lock(&nw_egl_mutex);
+-            pthread_cond_broadcast(&nw_egl_cond);
+-            pthread_mutex_unlock(&nw_egl_mutex);
+-            surfaceInUse = false;
+-        }
+-    } else {
+-        return window->context.egl.surface;
++    EGLSurface oldSurface = window->context.egl.surface;
++    eglMakeCurrent(_glfw.egl.display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
++    if (oldSurface != EGL_NO_SURFACE) {
++        eglDestroySurface(_glfw.egl.display, oldSurface);
++    }
++    if (currentMode == GLFW_ANDROID_WINDOW_MODE_SURFACE) {
++        surfaceInUse = false;
+     }
+ 
+-    EGLDisplay  display = _glfw.egl.display;
+-    EGLConfig  config = window->context.egl.config;
++    EGLDisplay display = _glfw.egl.display;
++    EGLConfig config = window->context.egl.config;
+     EGLSurface newSurface;
+ 
+-    switch (wantedMode) {
+-        case GLFW_ANDROID_WINDOW_MODE_PBUFFER: {
+-            const EGLint attribs[] = {
+-                    EGL_WIDTH, window->android.width,
+-                    EGL_HEIGHT, window->android.height,
+-                    EGL_NONE
+-            };
+-            LOGI("Configure pbuffer for inactive window");
+-            newSurface = eglCreatePbufferSurface(display, config, attribs);
+-        } break;
+-        case GLFW_ANDROID_WINDOW_MODE_SURFACE: {
+-            LOGI("Configure native window: %p", nativeWindow);
+-            updateNativeWindowDimensions(window);
+-            surfaceInUse = true;
+-            newSurface = eglCreateWindowSurface(display, config, nativeWindow, NULL);
+-        } break;
+-        default:
+-            abort();
++    if (wantedMode == GLFW_ANDROID_WINDOW_MODE_PBUFFER) {
++        const EGLint attribs[] = {
++                EGL_WIDTH, window->android.width,
++                EGL_HEIGHT, window->android.height,
++                EGL_NONE
++        };
++        LOGI("Configure pbuffer for inactive window");
++        newSurface = eglCreatePbufferSurface(display, config, attribs);
++    } else {
++        LOGI("Configure native window: %p", nativeWindow);
++        readNativeWindowSizeLocked(window, &newWidth, &newHeight);
++        sizeChanged = true;
++        surfaceInUse = true;
++        newSurface = eglCreateWindowSurface(display, config, nativeWindow, NULL);
++        if (newSurface == EGL_NO_SURFACE) {
++            // The window stays in SURFACE mode with no surface, and swaps are not retried until the next surface
++            // callback. Logged so the failure is visible rather than silent.
++            LOGE("eglCreateWindowSurface failed: 0x%x", eglGetError());
++        }
+     }
+ 
+     window->android.mode = wantedMode;
+     window->context.egl.surface = newSurface;
+-    return newSurface;
++    result = newSurface;
++    pthread_mutex_unlock(&nw_egl_mutex);
++
++    if (sizeChanged) reportWindowSize(window, newWidth, newHeight);
++    return result;
+ }
+ 
+-// Check if the surface has been changed before attempting to swap buffers
+-GLFWbool _glfwSwapBuffersAttentionEglAndroid(_GLFWwindow* window) {
++// Requires nw_egl_mutex: reads the mode and the surface state that nativeSurfaceDestroyed changes.
++static GLFWbool swap_attention_locked(_GLFWwindow* window) {
+     if(window == surfaceOwner && !ownedByVulkan) {
+         switch (window->android.mode) {
+             case GLFW_ANDROID_WINDOW_MODE_UNDEFINED: return true;
+@@ -1088,6 +1125,23 @@ GLFWbool _glfwSwapBuffersAttentionEglAndroid(_GLFWwindow* window) {
+     return false;
+ }
+ 
++// Check if the surface has been changed before attempting to swap buffers
++GLFWbool _glfwSwapBuffersAttentionEglAndroid(_GLFWwindow* window) {
++    pthread_mutex_lock(&nw_egl_mutex);
++    GLFWbool result = swap_attention_locked(window);
++    pthread_mutex_unlock(&nw_egl_mutex);
++    return result;
++}
++
++// nativeSurfaceDestroyed clears window->context.egl.surface on another thread, under nw_egl_mutex. Reading the
++// field without the lock could hand eglSwapBuffers a surface that was just destroyed. The lock is held for the read only.
++EGLSurface _glfwSwapSurfaceAndroid(_GLFWwindow* window) {
++    pthread_mutex_lock(&nw_egl_mutex);
++    EGLSurface surface = window->context.egl.surface;
++    pthread_mutex_unlock(&nw_egl_mutex);
++    return surface;
++}
++
+ const char* _glfwGetScancodeNameAndroid(int scancode)
+ {
+     switch (scancode) {
+@@ -1388,14 +1442,48 @@ void android_notify_init(){
+ }
+ 
+ 
++// Detaches the current native window from GLFW. Requires nw_egl_mutex.
++//
++// It never waits for the render thread. If the window surface is still current on that thread,
++// eglDestroySurface only marks it for destruction and EGL frees it when the thread releases it.
++// The render thread switches to a pbuffer on its next swap, and manage creates it under the same lock.
++// The ANativeWindow reference is returned to the caller, which releases it after unlocking.
++static struct ANativeWindow* detach_native_window_locked(void) {
++    surfaceDestroyed = true;
++    if(!ownedByVulkan && surfaceOwner != NULL && surfaceOwner->android.mode == GLFW_ANDROID_WINDOW_MODE_SURFACE) {
++        EGLSurface surface = surfaceOwner->context.egl.surface;
++        if(surface != EGL_NO_SURFACE) eglDestroySurface(_glfw.egl.display, surface);
++        surfaceOwner->context.egl.surface = EGL_NO_SURFACE;
++        surfaceOwner->android.mode = GLFW_ANDROID_WINDOW_MODE_UNDEFINED;
++        surfaceInUse = false;
++    }
++    struct ANativeWindow* previous = nativeWindow;
++    nativeWindow = NULL;
++    return previous;
++}
++
+ JNIEXPORT void JNICALL
+ Java_git_artdeell_dnbootstrap_glfw_GLFW_nativeSurfaceCreated(JNIEnv *env, jclass clazz,
+                                                                          jobject surface) {
++    // ANativeWindow_fromSurface returns a reference that the caller owns. It is released exactly once,
++    // in nativeSurfaceDestroyed (or here, if a window is still attached).
+     ANativeWindow* window = ANativeWindow_fromSurface(env, surface);
+-    ANativeWindow_acquire(window);
++    if(window == NULL) {
++        LOGE("ANativeWindow_fromSurface returned NULL");
++        return;
++    }
+     LOGI("Acquired native window: %p", window);
++
++    pthread_mutex_lock(&nw_egl_mutex);
++    struct ANativeWindow* previous = detach_native_window_locked();
+     nativeWindow = window;
+     surfaceDestroyed = false;
++    pthread_mutex_unlock(&nw_egl_mutex);
++
++    if(previous != NULL) {
++        LOGE("Native window replaced without a destroy callback; releasing the previous one");
++        ANativeWindow_release(previous);
++    }
+     if(ownedByVulkan) {
+         pthread_mutex_lock(&nw_vulkan_mutex);
+         pthread_cond_broadcast(&nw_vulkan_cond);
+@@ -1411,29 +1499,24 @@ Java_git_artdeell_dnbootstrap_glfw_GLFW_nativeSurfaceUpdated(JNIEnv *env, jclass
+ JNIEXPORT void JNICALL
+ Java_git_artdeell_dnbootstrap_glfw_GLFW_nativeSurfaceDestroyed(JNIEnv *env,
+                                                                            jclass clazz) {
+-    surfaceDestroyed = true;
+-    if(!ownedByVulkan && surfaceInUse) {
+-        pthread_mutex_lock(&nw_egl_mutex);
+-        pthread_cond_wait(&nw_egl_cond, &nw_egl_mutex);
+-        LOGI("Unhalted after window destruction");
+-        ANativeWindow_release(nativeWindow);
+-        nativeWindow = NULL;
+-        pthread_mutex_unlock(&nw_egl_mutex);
+-    }else {
+-        ANativeWindow_release(nativeWindow);
+-        nativeWindow = NULL;
+-    }
+-
++    pthread_mutex_lock(&nw_egl_mutex);
++    struct ANativeWindow* released = detach_native_window_locked();
++    pthread_mutex_unlock(&nw_egl_mutex);
++    if(released != NULL) ANativeWindow_release(released);
+ }
+ 
+ 
+ JNIEXPORT void JNICALL
+ Java_git_artdeell_dnbootstrap_glfw_GLFW_sendMousePosition0__DD(JNIEnv *env, jclass clazz,
+                                                           jdouble v1, jdouble v2) {
+-    _glfw.android.xcursor = v1;
+-    _glfw.android.ycursor = v2;
+-    update_flags |= FLAG_MOUSE_POS;
+-    _input_queue_wait_unlock(&input_queue);
++    // Queued as an event, not stored in a shared flag, so the position stays in order with the button,
++    // key and scroll events around it. Only the GLFW thread reads xcursor and ycursor.
++    input_event_t event = {
++            .type = GLFW_ANDROID_EVENT_TYPE_MOUSE_POS,
++            .p.x = v1,
++            .p.y = v2
++    };
++    android_send_event(&event);
+ }
+ 
+ JNIEXPORT void JNICALL
+@@ -1496,13 +1579,38 @@ Java_git_artdeell_dnbootstrap_glfw_GLFW_sendMouseEvent(JNIEnv *env, jclass clazz
+ JNIEXPORT void JNICALL
+ Java_git_artdeell_dnbootstrap_glfw_GLFW_sendBulkUnicodeEvent(JNIEnv *env, jclass clazz,
+                                                              jstring input, jint mods) {
++    // Decodes UTF-16 into code points, so characters outside the BMP (surrogate pairs) reach GLFW whole.
++    // Unpaired surrogates become U+FFFD, and NUL is skipped.
++    if(input == NULL) return;
+     jsize length = (*env)->GetStringLength(env, input);
+-    jchar* codepoints = malloc(length * sizeof(codepoints));
+-    (*env)->GetStringRegion(env, input, 0, length, codepoints);
++    if(length <= 0) return;
++    const jchar *chars = (*env)->GetStringChars(env, input, NULL);
++    if(chars == NULL) return;
++    uint32_t *codepoints = malloc((size_t) length * sizeof(uint32_t));
++    if(codepoints == NULL) {
++        (*env)->ReleaseStringChars(env, input, chars);
++        return;
++    }
++    int32_t count = 0;
++    for(jsize i = 0; i < length; i++) {
++        uint32_t c = chars[i];
++        if(c >= 0xD800 && c <= 0xDBFF && i + 1 < length && chars[i + 1] >= 0xDC00 && chars[i + 1] <= 0xDFFF) {
++            c = 0x10000 + ((c - 0xD800) << 10) + (chars[i + 1] - 0xDC00);
++            i++;
++        } else if(c >= 0xD800 && c <= 0xDFFF) {
++            c = 0xFFFD;
++        }
++        if(c != 0) codepoints[count++] = c;
++    }
++    (*env)->ReleaseStringChars(env, input, chars);
++    if(count == 0) {
++        free(codepoints);
++        return;
++    }
+ 
+     input_event_t event = {
+             .type = GLFW_ANDROID_EVENT_TYPE_UNICODE_CHARS,
+-            .u.length = length,
++            .u.length = count,
+             .u.mods = mods,
+             .u.codepoints = codepoints
+     };
+diff --git a/src/egl_context.c b/src/egl_context.c
+index 2088e850..9ad65706 100644
+--- a/src/egl_context.c
++++ b/src/egl_context.c
+@@ -295,11 +295,17 @@ static void swapBuffersEGL(_GLFWwindow* window)
+                         "EGL: The context must be current on the calling thread when swapping buffers");
+         return;
+     }
++    EGLSurface surface = window->context.egl.surface;
+ #if defined(_GLFW_ANDROID)
+     if (_glfw.platform.platformID == GLFW_PLATFORM_ANDROID)
+     {
+         if(_glfwSwapBuffersAttentionEglAndroid(window))
+             makeContextCurrentEGL(window);
++        // Read under the lock, because the surface can be destroyed on another thread at any time.
++        surface = _glfwSwapSurfaceAndroid(window);
++        // No surface for this frame. The next surface callback restores one, so there is nothing to swap.
++        if (surface == EGL_NO_SURFACE)
++            return;
+     }
+ #endif
+ 
+@@ -321,7 +327,7 @@ static void swapBuffersEGL(_GLFWwindow* window)
+     }
+ #endif
+ 
+-    eglSwapBuffers(_glfw.egl.display, window->context.egl.surface);
++    eglSwapBuffers(_glfw.egl.display, surface);
+ }
+ 
+ static void swapIntervalEGL(int interval)

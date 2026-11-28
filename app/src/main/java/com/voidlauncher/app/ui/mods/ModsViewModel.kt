@@ -3,6 +3,7 @@ package com.voidlauncher.app.ui.mods
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.voidlauncher.app.data.AppPrefs
 import com.voidlauncher.app.data.ModRepository
 import com.voidlauncher.app.data.SelectedVersion
 import com.voidlauncher.app.domain.model.ModSearchResult
@@ -17,7 +18,7 @@ class ModsViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = ModRepository(File(application.filesDir, "minecraft"))
 
-    private val _uiState = MutableStateFlow(ModsUiState())
+    private val _uiState = MutableStateFlow(ModsUiState(loader = AppPrefs.modLoader()))
     val uiState: StateFlow<ModsUiState> = _uiState.asStateFlow()
 
     init {
@@ -33,13 +34,22 @@ class ModsViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(query = query) }
     }
 
+    /** Picks the mod loader Modrinth filters by. The choice is saved and the old results are cleared. */
+    fun setLoader(loader: String) {
+        if (loader !in ModRepository.LOADERS || loader == _uiState.value.loader) return
+        AppPrefs.saveModLoader(loader)
+        _uiState.update { it.copy(loader = loader, results = emptyList(), message = null) }
+    }
+
     fun search() {
-        val version = _uiState.value.gameVersion ?: return
-        val query = _uiState.value.query.trim()
+        val state = _uiState.value
+        val version = state.gameVersion ?: return
+        val query = state.query.trim()
+        val loader = state.loader
         viewModelScope.launch {
             _uiState.update { it.copy(isSearching = true, message = null) }
             try {
-                val results = repository.search(query, version)
+                val results = repository.search(query, version, loader)
                 _uiState.update { it.copy(results = results, isSearching = false) }
             } catch (e: Exception) {
                 _uiState.update {
@@ -50,15 +60,23 @@ class ModsViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun install(result: ModSearchResult) {
-        val version = _uiState.value.gameVersion ?: return
+        val state = _uiState.value
+        val version = state.gameVersion ?: return
+        val loader = state.loader
         viewModelScope.launch {
             _uiState.update { it.copy(installingProjectId = result.projectId, message = null) }
             try {
-                val saved = repository.install(result.projectId, version)
-                val extra = saved.size - 1
+                val install = repository.install(result.projectId, version, loader)
+                val extra = install.savedFiles.size - 1
                 val suffix = if (extra > 0) " plus $extra required file${if (extra == 1) "" else "s"}" else ""
+                val skipped = install.skippedDependencies
+                val skipNote = if (skipped > 0) {
+                    " $skipped required dependenc${if (skipped == 1) "y" else "ies"} had no file for this version and loader, so ${if (skipped == 1) "it was" else "they were"} skipped."
+                } else {
+                    ""
+                }
                 _uiState.update {
-                    it.copy(installingProjectId = null, message = "Installed ${result.title}$suffix.")
+                    it.copy(installingProjectId = null, message = "Installed ${result.title}$suffix.$skipNote")
                 }
                 reloadInstalled()
             } catch (e: Exception) {

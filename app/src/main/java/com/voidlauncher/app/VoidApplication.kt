@@ -1,6 +1,9 @@
 package com.voidlauncher.app
 
 import android.app.Application
+import com.voidlauncher.app.data.AppPrefs
+import com.voidlauncher.app.data.SelectedVersion
+import com.voidlauncher.app.data.launch.TouchControls
 import com.voidlauncher.app.data.log.AppLog
 
 class VoidApplication : Application() {
@@ -8,5 +11,8 @@ class VoidApplication : Application() {
         super.onCreate()
         AppLog.init(this)
         AppLog.write("App started")
+        AppPrefs.init(this)
+        TouchControls.reload()
+        SelectedVersion.restore()
     }
 }

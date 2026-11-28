@@ -64,8 +64,27 @@ jobs:
 
       - name: Collect the built native libraries
         run: |
+          set -euo pipefail
           mkdir -p out
           cp lwjgl3/bin/out/*.so out/ 2>/dev/null || true
+
+          # libopenal.so is not produced by LWJGL's Android build: the OpenAL binding is Java-only and has no C
+          # sources. ci_build_android.bash downloads it from PojavLauncherTeam's jniLibs into
+          # bin/libs/native/linux/arm64/org/lwjgl/openal/ and never copies it to bin/out, so it is copied here.
+          # LWJGL's Library.loadNative("openal") needs it by name, so a release without it cannot start the game.
+          OPENAL=lwjgl3/bin/libs/native/linux/arm64/org/lwjgl/openal/libopenal.so
+          if [ ! -s "$OPENAL" ]; then
+            echo "::error::$OPENAL is missing or empty"
+            exit 1
+          fi
+          # A here-string instead of a pipe: grep -q exits on the first match, which would break a pipe under pipefail.
+          if ! grep -q "Machine:.*AArch64" <<< "$(readelf -h "$OPENAL")"; then
+            echo "::error::$OPENAL is not an AArch64 library"
+            exit 1
+          fi
+          cp "$OPENAL" out/libopenal.so
+          echo "libopenal.so from PojavLauncherTeam's jniLibs (not rebuilt here):"
+          sha256sum out/libopenal.so
           ls -la out
 
       - name: Upload as a build artifact (always, so a failed release step still leaves this)
@@ -86,5 +105,5 @@ jobs:
           gh release create "$TAG" out/*.so \
             --target "$GITHUB_SHA" \
             --title "LWJGL 3.3.3 natives (arm64 Android), run ${{ github.run_number }}" \
-            --notes "Built from PojavLauncherTeam/lwjgl3 at wip/rebase_3.3.3 using their own ci_build_android.bash, for arm64 (aarch64-linux-android) only, from commit ${{ github.sha }}. Not yet promoted to the stable tag used by the app." \
+            --notes "Built from PojavLauncherTeam/lwjgl3 at wip/rebase_3.3.3 using their own ci_build_android.bash, for arm64 (aarch64-linux-android) only, from commit ${{ github.sha }}. libopenal.so is PojavLauncherTeam's prebuilt OpenAL Soft (LGPL-2.0 or later upstream), copied unchanged; its SHA-256 is in the build log. Not yet promoted to the stable tag used by the app." \
             --prerelease

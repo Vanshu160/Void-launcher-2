@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -25,6 +26,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.voidlauncher.app.data.ModRepository
 import com.voidlauncher.app.domain.model.InstalledMod
 import com.voidlauncher.app.domain.model.ModSearchResult
 import com.voidlauncher.app.ui.components.VoidCard
@@ -49,8 +51,25 @@ fun ModsScreen(viewModel: ModsViewModel = viewModel()) {
                 text = if (version == null) {
                     "Select a version in Versions first."
                 } else {
-                    "For Minecraft $version with Fabric, from Modrinth"
+                    "For Minecraft $version with ${state.loader.replaceFirstChar { it.uppercase() }}, from Modrinth"
                 },
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.onSurfaceVariant,
+            )
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ModRepository.LOADERS.forEach { loader ->
+                    FilterChip(
+                        selected = state.loader == loader,
+                        onClick = { viewModel.setLoader(loader) },
+                        label = { Text(loader.replaceFirstChar { it.uppercase() }) },
+                    )
+                }
+            }
+            Text(
+                text = "The loader sets which mods are listed. Launching the game needs that loader installed, which the launcher does not do yet.",
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.onSurfaceVariant,
             )

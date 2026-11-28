@@ -1,0 +1,13 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index f174f57..062e33b 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -131,6 +131,8 @@ set(C_SRC_FILES
+     src/gl/math/matheval.c
+     src/glx/hardext.c
+     src/glx/lookup.c
++    src/egl/egl.c
++    src/egl/lookup.c
+     src/glx/gbm.c
+     src/glx/streaming.c
+     src/gl/vgpu/shaderconv.c

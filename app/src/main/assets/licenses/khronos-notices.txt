@@ -1,0 +1,49 @@
+Khronos header notices for NG-GL4ES (pinned source commit 6e153a1622a8d9ef903f7975aafbef2453571bab)
+
+These notices cover the Khronos headers in NG-GL4ES's include/ directory. The headers are included in the build to
+declare the API and are not copied into the APK, but their notices are shipped here for completeness.
+
+1. MIT (headers marked SPDX-License-Identifier: MIT)
+   Files: include/GLES/gl.h, include/GLES/glext.h, include/GLES3/gl3.h, include/GLES3/gl31.h, include/GLES3/gl32.h
+   The license grant below is copied verbatim from include/KHR/khrplatform.h in the pinned source, lines 2 to 21 of
+   the block (the copyright line is the one that file carries). The identical grant appears in the Khronos
+   EGL-Registry, api/KHR/khrplatform.h, at commit aa39a34729e6d20b0b982e279c351976a5c91075, where the copyright
+   line reads "2008-2018".
+
+** Copyright (c) 2008-2009 The Khronos Group Inc.
+**
+** Permission is hereby granted, free of charge, to any person obtaining a
+** copy of this software and/or associated documentation files (the
+** "Materials"), to deal in the Materials without restriction, including
+** without limitation the rights to use, copy, modify, merge, publish,
+** distribute, sublicense, and/or sell copies of the Materials, and to
+** permit persons to whom the Materials are furnished to do so, subject to
+** the following conditions:
+**
+** The above copyright notice and this permission notice shall be included
+** in all copies or substantial portions of the Materials.
+**
+** THE MATERIALS ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+** EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+** MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+** IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+** CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+** TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+** MATERIALS OR THE USE OR OTHER DEALINGS IN THE MATERIALS.
+*/
+
+2. Apache License 2.0 (headers marked SPDX-License-Identifier: Apache-2.0)
+   Files: include/EGL/egl.h, include/EGL/eglext.h, include/EGL/eglplatform.h, include/GLES/egl.h,
+          include/GLES/glplatform.h, include/GLES3/gl3platform.h
+   Copyright line in include/EGL/egl.h: "Copyright 2013-2020 The Khronos Group Inc."
+   The full Apache License 2.0 text is in SPIRV-Cross-LICENSE.txt in this folder. That file is SPIRV-Cross's own
+   license (Apache-2.0), taken from the pinned SPIRV-Cross commit adec7acbf41a988713cdb85f93f26c8ca5ea863e.
+   It has not been compared byte-for-byte with the copy published at apache.org.
+
+3. Headers with no notice in the file (license not confirmed from the pinned source)
+   Files: include/GLES/gl2.h, include/GLES/gl2ext.h, include/GLES/gl2platform.h, include/GLES/gl3ext.h,
+          include/GLES/gl3platform.h, include/GL/gl_mangle.h, include/android_debug.h,
+          include/gl4eshint.h, include/gl4esinit.h
+   For GLES/gl2.h, the Khronos OpenGL-Registry at commit 6af574a14089ccfee87efe230ebcdd8742859813 marks the file
+   SPDX-License-Identifier: MIT (Copyright 2013-2026 The Khronos Group Inc.). The NG copy has no notice, and no
+   other file in this list was checked against an upstream copy.

@@ -1,0 +1,63 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index c0a2433..f174f57 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -10,7 +10,7 @@ project(ng_gl4es)
+     endif()
+ 
+     if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+-        add_compile_options(-g0 -O3 -ffunction-sections -fdata-sections)
++        add_compile_options(-g1 -O3 -ffunction-sections -fdata-sections)
+         add_link_options(-Wl,--gc-sections)
+     elseif (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+         add_compile_options(/O2 /GL)
+@@ -57,7 +57,7 @@ if(ANDROID)
+     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DNOX11")
+ endif()
+ 
+-include_directories(${CMAKE_SOURCE_DIR}/include )
++include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include )
+ 
+ set(C_SRC_FILES
+     src/gl/string_utils.c
+@@ -150,15 +150,15 @@ set(SRC_FILES ${CPP_SRC_FILES} ${C_SRC_FILES})
+ 
+ add_library(ng_gl4es SHARED ${SRC_FILES})
+ 
+-target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
++target_link_libraries(ng_gl4es PRIVATE
+     glslang::glslang
+     spirv-cross-c
+ )
+ 
+ if(MACOS)
+     # iOS
+-    target_link_libraries(${CMAKE_PROJECT_NAME} PUBLIC
+-        "-F${CMAKE_SOURCE_DIR}/external"
++    target_link_libraries(ng_gl4es PUBLIC
++        "-F${CMAKE_CURRENT_SOURCE_DIR}/external"
+         "-framework libEGL"
+         "-framework libGLESv2"
+         "-framework Metal"
+@@ -168,7 +168,7 @@ if(MACOS)
+ else()
+ if(ANDROID)
+     # Android
+-    target_link_libraries(${CMAKE_PROJECT_NAME} PUBLIC
++    target_link_libraries(ng_gl4es PUBLIC
+         android
+         log
+     )
+@@ -178,9 +178,9 @@ endif()
+ endif()
+ 
+ target_include_directories(ng_gl4es PUBLIC
+-    ${CMAKE_SOURCE_DIR}/include
++    ${CMAKE_CURRENT_SOURCE_DIR}/include
+ )
+ 
+-set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES
+-    LINK_FLAGS "-Wl,--strip-all"
++set_target_properties(ng_gl4es PROPERTIES
++    LINK_FLAGS ""
+ )

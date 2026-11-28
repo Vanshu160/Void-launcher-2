@@ -12,7 +12,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # NG-GL4ES builds glslang and SPIRV-Cross from source for ARM64 on every build, which takes longer than before.
+    timeout-minutes: 45
     permissions:
       contents: write
     steps:
@@ -27,14 +28,140 @@ jobs:
         with:
           gradle-version: 9.6.0
 
+      # Unit tests of the pure-Kotlin input logic: held-key counting, joystick mapping, hit testing and layout parsing.
+      - name: Run unit tests
+        run: gradle testDebugUnitTest --stacktrace
+
       - name: Build debug APK
         run: gradle assembleDebug --stacktrace
+
+      # Checks that the APK contains every renderer library and license notice, that the renderer libraries are
+      # AArch64, and that the license copies match the SHA-256 values recorded in THIRD_PARTY.md.
+      - name: Verify APK renderer libraries and licenses
+        run: |
+          set -euo pipefail
+          APK=$(ls app/build/outputs/apk/debug/*.apk | head -n 1)
+          echo "APK: $APK"
+          ENTRIES=$(unzip -Z1 "$APK")
+          for entry in \
+            lib/arm64-v8a/libng_gl4es.so \
+            lib/arm64-v8a/libgl4es_114.so \
+            lib/arm64-v8a/libglfw.so \
+            lib/arm64-v8a/libmojort.so \
+            lib/arm64-v8a/libmojoexec.so \
+            assets/licenses/gl4es-LICENSE.txt \
+            assets/licenses/ng-gl4es-LICENSE.txt \
+            assets/licenses/ng-gl4es-bundled-notices.txt \
+            assets/licenses/glslang-LICENSE.txt \
+            assets/licenses/SPIRV-Cross-LICENSE.txt \
+            assets/licenses/khronos-notices.txt; do
+            if ! printf '%s\n' "$ENTRIES" | grep -qxF "$entry"; then
+              echo "::error::$entry is missing from the APK"
+              exit 1
+            fi
+          done
+          echo "All required native libraries and license files are present."
+
+          TMP=$(mktemp -d)
+          unzip -q "$APK" 'lib/arm64-v8a/*' -d "$TMP"
+          for lib in libng_gl4es.so libgl4es_114.so libglfw.so libmojort.so libmojoexec.so; do
+            machine=$(readelf -h "$TMP/lib/arm64-v8a/$lib" | grep "Machine:" | sed 's/^ *Machine: *//')
+            echo "$lib: $machine"
+            case "$machine" in
+              "AArch64"*) ;;
+              *) echo "::error::$lib is not an AArch64 library"; exit 1 ;;
+            esac
+          done
+
+          check_sha() {
+            local entry="$1" expected="$2" actual
+            actual=$(unzip -p "$APK" "$entry" | sha256sum | awk '{print $1}')
+            if [ "$actual" != "$expected" ]; then
+              echo "::error::$entry SHA-256 is $actual, expected $expected"
+              exit 1
+            fi
+            echo "$entry SHA-256 matches"
+          }
+          check_sha assets/licenses/gl4es-LICENSE.txt 69a3049c77abd88658f6ad7cf6a5b6ceb5cf03b80e60f7c4657d90322cfab7bd
+          check_sha assets/licenses/ng-gl4es-LICENSE.txt 51c5b405e035a85462b5211dff42b111dbcf028788327597e69b953d610e9d30
+          check_sha assets/licenses/ng-gl4es-bundled-notices.txt e1b96fde8065a02ba593e6c0218d6d409f40a85a0fdc36b80314db400d54d69b
+          check_sha assets/licenses/glslang-LICENSE.txt 17e70c676e1521ff3e4686f04a2053d93a7e28a33be8de7ec37ab0ff72feb677
+          check_sha assets/licenses/SPIRV-Cross-LICENSE.txt cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30
+          check_sha assets/licenses/khronos-notices.txt 5eed77569da155fb3d9dbb886f33bf56171f5745409a459fea7370d90d78184c
+
+          # Symbols. The unstripped libng_gl4es.so from this build (uploaded as void-launcher-native-symbols) must
+          # have a symbol table and the same GNU build-id as the APK copy, so a crash offset maps to the right build.
+          # libgl4es_114.so is a prebuilt jniLibs file, so this build does not produce an unstripped copy of it.
+          has_symtab() {
+            local sections
+            sections=$(readelf -S "$1")
+            case "$sections" in
+              *"] .symtab "*) return 0 ;;
+            esac
+            return 1
+          }
+          build_id() {
+            readelf -n "$1" | awk '/Build ID:/ {print $3}'
+          }
+          lib=libng_gl4es.so
+          apk_copy="$TMP/lib/arm64-v8a/$lib"
+          if has_symtab "$apk_copy"; then
+            echo "::warning::$lib in the APK still has a symbol table. The APK copy is not stripped."
+          else
+            echo "$lib in the APK is stripped"
+          fi
+          obj=$(find app/build/intermediates -path "*/obj/arm64-v8a/$lib" | head -n 1)
+          if [ -z "$obj" ]; then
+            echo "::error::unstripped $lib was not found in the build output"
+            exit 1
+          fi
+          if ! has_symtab "$obj"; then
+            echo "::error::$obj has no symbol table"
+            exit 1
+          fi
+          apk_id=$(build_id "$apk_copy")
+          obj_id=$(build_id "$obj")
+          if [ -z "$obj_id" ] || [ "$apk_id" != "$obj_id" ]; then
+            echo "::error::$lib build-id differs: APK '$apk_id', unstripped '$obj_id'"
+            exit 1
+          fi
+          echo "Unstripped $lib: $obj, build-id $obj_id, matches the APK copy"
+          # EGL entry points. GLFW gets eglGetProcAddress from the renderer library and loads the rest by name. A library
+          # missing any of these fails at window creation, so each one must be exported (defined) in the APK copy.
+          EGL_SYMBOLS="eglGetProcAddress eglGetDisplay eglInitialize eglChooseConfig eglCreateContext eglCreateWindowSurface eglMakeCurrent eglSwapBuffers eglDestroyContext eglTerminate"
+          for lib in libng_gl4es.so libgl4es_114.so; do
+            exports=$(readelf --dyn-syms -W "$TMP/lib/arm64-v8a/$lib" | awk '$7 != "UND" {print $8}' | sed 's/@.*//')
+            missing=""
+            for sym in $EGL_SYMBOLS; do
+              # A here-string instead of a pipe: grep -q exits on the first match, which would break a pipe.
+              if ! grep -qx "$sym" <<< "$exports"; then
+                missing="$missing $sym"
+              fi
+            done
+            if [ -n "$missing" ]; then
+              echo "::error::$lib does not export:$missing"
+              exit 1
+            fi
+            echo "$lib exports all required EGL entry points"
+          done
+          rm -rf "$TMP"
 
       - uses: actions/upload-artifact@v7
         with:
           name: void-launcher-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+      # Unstripped native libraries from the same build as the APK. A native crash reports an offset such as
+      # libmojort.so+0x596c, and only these copies (not the stripped ones in the APK) can map it to a function.
+      - name: Upload unstripped native libraries
+        if: success()
+        uses: actions/upload-artifact@v7
+        with:
+          name: void-launcher-native-symbols
+          path: app/build/intermediates/**/obj/arm64-v8a/*.so
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Publish APK as a GitHub Release (main only)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'

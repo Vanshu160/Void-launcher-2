@@ -11,6 +11,7 @@ import com.voidlauncher.app.data.local.VersionCache
 import com.voidlauncher.app.data.log.AppLog
 import com.voidlauncher.app.data.remote.GameMetadataParser
 import com.voidlauncher.app.data.runtime.JavaRuntimeManager
+import com.voidlauncher.app.ui.settings.SettingsStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -94,7 +95,11 @@ class DownloadsViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 try {
-                    launcher.launch(id) { status ->
+                    // The RAM setting is read at each launch, so a change applies the next time the game starts.
+                    // The renderer is read the same way, so a change applies the next time the game starts.
+                    val settings = SettingsStore.load()
+                    val ramMb = (settings.maxRamGb * 1024).toInt()
+                    launcher.launch(id, ramMb = ramMb, renderer = settings.glRenderer) { status ->
                         AppLog.write(status)
                         val finished = status == "Minecraft exited." ||
                             status.startsWith("Minecraft did not start") ||

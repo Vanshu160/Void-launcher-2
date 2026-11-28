@@ -34,6 +34,14 @@ android {
         }
     }
 
+    // GL4ES is loaded by file path (MojoExec.prepareEgl), so its .so must exist on disk in the
+    // native library directory. Without legacy packaging, Android keeps it inside the APK only.
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -62,4 +70,7 @@ dependencies {
     implementation(libs.xz)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
+
+    // Pure-Kotlin tests of the touch input logic. They do not run on a device.
+    testImplementation(libs.junit)
 }
