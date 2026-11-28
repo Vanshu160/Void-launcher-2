@@ -41,7 +41,7 @@ object TouchLayoutJson {
 
     fun decode(text: String): TouchLayout {
         if (text.length > MAX_CHARS) throw TouchLayoutFormatException("The layout file is too large.")
-        val root = Parser(text).parseDocument() as? JsonObject
+        val root = asObject(Parser(text).parseDocument())
             ?: throw TouchLayoutFormatException("The file is not a control layout.")
         if (root["format"] != FORMAT) throw TouchLayoutFormatException("The file is not a Void Launcher control layout.")
         val version = (root["version"] as? Double)?.toInt()
