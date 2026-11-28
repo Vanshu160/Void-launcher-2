@@ -1,6 +1,7 @@
 package com.voidlauncher.app.data.launch
 
 import com.voidlauncher.app.data.AppPrefs
+import com.voidlauncher.app.data.log.AppLog
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -109,7 +110,8 @@ object TouchControls {
             try {
                 return TouchLayoutJson.decode(saved)
             } catch (e: TouchLayoutFormatException) {
-                // A damaged layout falls back to the older positions or the default, rather than failing.
+                // The layout is logged, because the next save replaces it. The game falls back to the default for now.
+                AppLog.write("Control layout \"$name\" could not be read (${e.message}). The built-in layout is used instead.")
             }
         }
         return if (name == DEFAULT_NAME) migrateLegacy(screenProfile) else defaultLayout()

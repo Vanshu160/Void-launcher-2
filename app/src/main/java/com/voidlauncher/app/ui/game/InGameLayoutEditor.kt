@@ -61,6 +61,8 @@ fun InGameLayoutEditor(onExit: () -> Unit) {
     var message by remember { mutableStateOf<String?>(null) }
     var showProperties by remember { mutableStateOf(false) }
     var confirmExit by remember { mutableStateOf(false) }
+    // The action bar can be hidden, so the controls under it can be selected and moved.
+    var barShown by remember { mutableStateOf(true) }
     val colors = MaterialTheme.colorScheme
     val density = LocalDensity.current
     val selected = selectedId?.let { draft.button(it) }
@@ -159,13 +161,18 @@ fun InGameLayoutEditor(onExit: () -> Unit) {
                     color = if (message != null) colors.primary else Color.White,
                 )
             }
+            if (barShown) {
+                TextButton(onClick = { barShown = false }) {
+                    Text("Hide actions", color = Color.White)
+                }
+            }
             TextButton(onClick = { if (dirty) confirmExit = true else onExit() }) {
                 Text("Exit", color = Color.White)
             }
         }
 
-        // Bottom bar: the actions. It scrolls sideways on narrow screens.
-        Row(
+        // Bottom bar: the actions. It scrolls sideways on narrow screens, and it can be hidden.
+        if (barShown) Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
@@ -231,6 +238,13 @@ fun InGameLayoutEditor(onExit: () -> Unit) {
                 onExit()
             }) {
                 Text("Save and exit")
+            }
+        } else {
+            TextButton(
+                onClick = { barShown = true },
+                modifier = Modifier.align(Alignment.BottomStart).padding(8.dp),
+            ) {
+                Text("Show actions", color = Color.White)
             }
         }
     }

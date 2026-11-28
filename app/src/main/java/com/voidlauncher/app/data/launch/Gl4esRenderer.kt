@@ -133,6 +133,7 @@ object Gl4esRenderer {
      * Returns the reason [renderer] cannot be used in this process, or null if it can. A different renderer
      * already loaded means the app must restart before the new one can load.
      */
+    @Synchronized
     fun conflictReason(renderer: GlRenderer): String? {
         val current = loaded ?: return null
         if (current == renderer) return null
