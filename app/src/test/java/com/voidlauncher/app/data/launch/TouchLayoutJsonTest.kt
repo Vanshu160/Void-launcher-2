@@ -55,7 +55,8 @@ class TouchLayoutJsonTest {
 
     @Test
     fun namesWithQuotesBackslashesAndControlCharactersSurvive() {
-        val name = "He said \"hi\" \\ then\nleft\ttab"
+        // Names are capped at 24 characters on import, so this one stays short.
+        val name = "a\"b\\c\nd\te"
         val layout = TouchLayout(listOf(TouchButton(id = "odd", name = name)))
         assertEquals(name, TouchLayoutJson.decode(TouchLayoutJson.encode(layout)).buttons.single().name)
     }
