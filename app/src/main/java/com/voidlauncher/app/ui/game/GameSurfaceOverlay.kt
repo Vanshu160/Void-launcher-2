@@ -16,8 +16,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -40,6 +44,7 @@ import com.voidlauncher.app.data.launch.GameSurfaceBridge
 import com.voidlauncher.app.data.launch.GameTextInput
 import com.voidlauncher.app.data.launch.TouchRouter
 import com.voidlauncher.app.data.log.AppLog
+import com.voidlauncher.app.ui.settings.ManageLayoutsScreen
 
 /**
  * Full-screen game screen shown above the launcher while Minecraft starts and runs. Its TextureView
@@ -47,7 +52,11 @@ import com.voidlauncher.app.data.log.AppLog
  *
  * The TextureView stays in the composition from the start of the launch, because the surface it provides
  * is what GLFW needs. Until GLFW holds that surface, a loading status and a Cancel button are drawn over it.
- * Once GLFW holds the surface, the Keyboard and Quit buttons are drawn instead.
+ * Once GLFW holds the surface, the on-screen controls, a gear for the game menu, and the Keyboard and Quit buttons are
+ * drawn instead.
+ *
+ * The game menu opens the in-game layout editor or the layout list. While either is open, the game gets no touches,
+ * and held inputs are released when it opens.
  *
  * The overlay is removed when the game stops. Removing it detaches the TextureView, which
  * triggers the destroy callback, so GLFW always gets a destroy before the window goes away.
@@ -58,6 +67,15 @@ fun GameSurfaceOverlay() {
     if (!active) return
     val ready by GameSurfaceBridge.surfaceReady.collectAsState()
     val status by GameSurfaceBridge.status.collectAsState()
+    var editing by remember { mutableStateOf(false) }
+    var managing by remember { mutableStateOf(false) }
+    val layoutOpen = editing || managing
+
+    // Touches belong to a layout screen while it is open. Leaving the composition also turns routing back on.
+    DisposableEffect(layoutOpen) {
+        TouchRouter.setSuspended(layoutOpen)
+        onDispose { TouchRouter.setSuspended(false) }
+    }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(
@@ -66,8 +84,17 @@ fun GameSurfaceOverlay() {
         )
         GameKeyboardHost()
         if (ready) {
-            TouchControlsOverlay()
-            GameControls()
+            when {
+                editing -> InGameLayoutEditor(onExit = { editing = false })
+                managing -> ManageLayoutsScreen(onDone = { managing = false })
+                else -> {
+                    TouchControlsOverlay()
+                    GameControls(
+                        onEditLayout = { editing = true },
+                        onReplaceLayout = { managing = true },
+                    )
+                }
+            }
         } else {
             LaunchStatus(status)
         }
@@ -117,13 +144,29 @@ private fun LaunchStatus(status: String) {
 }
 
 /**
- * Keyboard and Quit buttons shown while the game is running. Quit asks first. The app process is ended, because
- * native Minecraft cannot be stopped safely from inside the process.
+ * The gear that opens the game menu, and the Keyboard and Quit buttons shown while the game is running. The menu offers
+ * the layout editor and the layout list. Quit asks first. The app process is ended, because native Minecraft cannot be
+ * stopped safely from inside the process.
  */
 @Composable
-private fun BoxScope.GameControls() {
+private fun BoxScope.GameControls(
+    onEditLayout: () -> Unit,
+    onReplaceLayout: () -> Unit,
+) {
     val context = LocalContext.current
     var confirmQuit by remember { mutableStateOf(false) }
+    var menuOpen by remember { mutableStateOf(false) }
+
+    IconButton(
+        onClick = { menuOpen = true },
+        modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Settings,
+            contentDescription = "Game menu",
+            tint = Color.White,
+        )
+    }
 
     Row(
         modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp),
@@ -137,6 +180,34 @@ private fun BoxScope.GameControls() {
         TextButton(onClick = { confirmQuit = true }) {
             Text("Quit", color = Color.White)
         }
+    }
+
+    if (menuOpen) {
+        AlertDialog(
+            onDismissRequest = { menuOpen = false },
+            title = { Text("Game menu") },
+            text = {
+                Column {
+                    TextButton(onClick = {
+                        menuOpen = false
+                        onEditLayout()
+                    }) {
+                        Text("Edit control layout")
+                    }
+                    TextButton(onClick = {
+                        menuOpen = false
+                        onReplaceLayout()
+                    }) {
+                        Text("Replace control layout")
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { menuOpen = false }) {
+                    Text("Close")
+                }
+            },
+        )
     }
 
     if (confirmQuit) {

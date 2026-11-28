@@ -31,9 +31,10 @@ what was studied, what was reproduced, and what was left out.
 | Per-button size, opacity, fill colour, outline colour and corner radius | `TouchButton.size`, `opacity`, `background`, `stroke`, `cornerRadius` |
 | Shown in the world, in menus, or both | `TouchButton.inWorld`, `inMenu` |
 | Layout saved as JSON, validated and sanitised on load | `TouchLayoutJson` (strict envelope, forgiving buttons, clamped numbers) |
-| Add, delete, drag and edit in an editor | `TouchLayoutEditor`, `TouchButtonInspector` |
-| Import and export of layout files | Storage Access Framework (`CreateDocument`, `OpenDocument`) |
-| Layouts per screen shape | `TouchGeometry.profileFor` |
+| Editor opened from the in-game gear menu, drawn over the game in place: select, drag, add, clone, delete, properties, save | `InGameLayoutEditor`, `TouchButtonInspector`, `GameSurfaceOverlay` |
+| Named layouts: Default Control Layout (built in, restorable), new, use, delete | `TouchControls.saveNamed`, `addLayout`, `setActive`, `ManageLayoutsScreen` |
+| Import and export of layout files | Storage Access Framework (`CreateDocument`, `OpenDocument`) in `ManageLayoutsScreen` |
+| Routing paused while an editor is open | `TouchRouter.setSuspended` |
 
 ## Default layout
 

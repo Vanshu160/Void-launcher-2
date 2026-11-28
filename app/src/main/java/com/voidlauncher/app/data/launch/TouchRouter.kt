@@ -54,11 +54,14 @@ object TouchRouter {
     private var surfaceWidth = 0
     private var surfaceHeight = 0
 
+    /** True while a layout editor is open. Touches then belong to that screen, not to the game. */
+    private var suspended = false
+
     /** Routes one touch event from the game surface. Always consumes it, as the game screen takes every touch. */
     fun onMotion(surface: View, event: MotionEvent): Boolean {
         surfaceWidth = surface.width
         surfaceHeight = surface.height
-        if (!GameSurfaceBridge.inputReady) return true
+        if (suspended || !GameSurfaceBridge.inputReady) return true
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> pointerDown(event, event.actionIndex)
             MotionEvent.ACTION_MOVE -> for (i in 0 until event.pointerCount) pointerMove(event, i)
@@ -94,6 +97,13 @@ object TouchRouter {
     /** [cancelAll] from any thread, run on the main thread. */
     fun cancelAllFromAnyThread() {
         mainHandler.post { cancelAll() }
+    }
+
+    /** Stops routing while a layout editor is open. Turning it on cancels every held input. Main thread only. */
+    fun setSuspended(on: Boolean) {
+        if (on == suspended) return
+        suspended = on
+        if (on) cancelAll()
     }
 
     /** Clears the routing state at the start of a launch. Sends nothing. Main thread only. */

@@ -60,7 +60,7 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var editingLayout by rememberSaveable { mutableStateOf(false) }
     if (editingLayout) {
-        TouchLayoutEditor(onDone = { editingLayout = false })
+        ManageLayoutsScreen(onDone = { editingLayout = false })
         return
     }
 
@@ -163,9 +163,9 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
                             onChange = { value -> viewModel.edit { it.copy(touchOpacity = value) } },
                         )
                         SettingAction(
-                            title = "Button layout",
-                            description = "Drag buttons to new places. Each screen shape keeps its own layout.",
-                            actionText = "Edit",
+                            title = "Control layouts",
+                            description = "Choose, import, export and delete layouts. Edit the active layout from the game's menu.",
+                            actionText = "Manage",
                             onClick = { editingLayout = true },
                         )
                         KeybindSection(viewModel = viewModel)

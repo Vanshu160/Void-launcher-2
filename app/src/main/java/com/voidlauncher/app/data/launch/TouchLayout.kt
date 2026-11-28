@@ -173,6 +173,12 @@ object TouchLayouts {
         ),
     )
 
+    /** A layout name as the app keeps it: one line, trimmed, at most [MAX_NAME_LENGTH] characters, never blank. */
+    fun cleanName(raw: String): String {
+        val oneLine = raw.replace(Regex("\\s+"), " ").trim().take(MAX_NAME_LENGTH).trim()
+        return oneLine.ifEmpty { "Layout" }
+    }
+
     /** An id that no button in [existing] uses. */
     fun newId(existing: Set<String>): String {
         var number = 1

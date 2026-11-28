@@ -78,7 +78,11 @@
 - [x] Mojo-style default layout, with the movement keys replaced by a joystick on the left
 - [x] JSON save, load, import and export, with validation and clamping
 - [x] Old per-control saves are migrated on first load
-- [x] Editor: select, drag, size, opacity, corners, colours, add, delete, bindings, toggle, slide-over, joystick options, default, import, export
+- [x] Editor: select, drag, size, opacity, corners, colours, add, delete, bindings, toggle, slide-over, joystick options, import, export
+- [x] In-game editor opened from the game menu (gear): select, drag, add button or joystick, clone, delete, properties, save, save and exit, discard confirmation
+- [x] Named layouts: Default Control Layout (built in, restorable), new from active, import, export, use, delete
+- [x] Routing is suspended while an editor is open, and held inputs are released when it opens
+- [ ] Not yet built: Size W x H, per-button stroke width, button snapping, select default from the list, search, long-press to set default, drawers, mouse passthrough, gyro
 - [x] Per-finger routing with multi-touch, toggles, slide-over and absolute joystick
 - [x] Forward lock holds sprint (Ctrl) while the stick is pulled past its edge
 - [x] Held inputs released on pause, exit, screen switch and context change
