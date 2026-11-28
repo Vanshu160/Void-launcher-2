@@ -71,3 +71,20 @@
 - [ ] Tested on a phone: LWJGL loads without the platform-mismatch warning
 - [ ] Tested on a phone: JNA/oshi initialize without the libc.so.6 error
 - [ ] Tested on a phone: GLFW opens an on-screen window
+
+## Touch controls - Mojo-style layout (in progress)
+- [x] MojoLauncher source studied (LGPL-3.0): layout model, joystick, editor, serialization. No code copied; behaviour reimplemented (docs/touch-controls.md)
+- [x] Layout model: key, mouse, scroll and joystick buttons, up to 4 bindings each
+- [x] Mojo-style default layout, with the movement keys replaced by a joystick on the left
+- [x] JSON save, load, import and export, with validation and clamping
+- [x] Old per-control saves are migrated on first load
+- [x] Editor: select, drag, size, opacity, corners, colours, add, delete, bindings, toggle, slide-over, joystick options, default, import, export
+- [x] Per-finger routing with multi-touch, toggles, slide-over and absolute joystick
+- [x] Forward lock holds sprint (Ctrl) while the stick is pulled past its edge
+- [x] Held inputs released on pause, exit, screen switch and context change
+- [x] Unit tests for geometry, JSON codec and layout model (run in CI)
+- [ ] CI build and unit tests pass for this commit
+- [ ] Tested on a phone: joystick feel, multi-touch, slide-over, toggles
+- [ ] Tested on a phone: Minecraft accepts synthetic key and button events from each binding
+- [ ] Tested on a phone: layouts survive an app restart and screen rotation
+- [ ] Not yet built: keyboard (IME) button, GUI toggle, virtual mouse, mouse passthrough

@@ -4,7 +4,8 @@ import git.artdeell.dnbootstrap.glfw.GLFW
 
 /**
  * Sends key and mouse button presses to GLFW, and tracks which owner holds each one, so a code held by two owners
- * is pressed once and released once. Owners are the touch controls, the finger gestures in [GameInput] and taps.
+ * is pressed once and released once. Owners are the touch buttons, the joysticks, the finger gestures in [GameInput]
+ * and taps.
  *
  * Nothing is sent while GLFW input is not ready. The bookkeeping still runs, so a later release is never lost.
  * Main thread only.
@@ -28,10 +29,15 @@ object HeldInputs {
         send { GLFW.sendMouseEvent(button, if (pressed) GLFW_PRESS else GLFW_RELEASE, 0) }
     }
 
-    /** A key press and release at once, such as Inventory or Chat. */
+    /** A key press and release at once. */
     fun tapKey(owner: Any, glfwKey: Int) {
         setKey(owner, glfwKey, true)
         setKey(owner, glfwKey, false)
+    }
+
+    /** One scroll tick. Negative scrolls up and positive scrolls down. Scrolling is not held, so nothing is tracked. */
+    fun scrollTick(vertical: Int) {
+        send { GLFW.sendScrollEvent(0.0, vertical.toDouble()) }
     }
 
     /** Lets go of everything [owner] holds. */
