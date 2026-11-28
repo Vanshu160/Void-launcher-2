@@ -54,8 +54,10 @@ object Lwjgl333Natives {
      *  - liblwjgl_stb.so     LibSTB.java, Platform.mapLibraryNameBundled("lwjgl_stb")
      *  - liblwjgl_tinyfd.so  TinyFileDialogs.java, Library.loadSystem(..., "lwjgl_tinyfd")
      *  - libfreetype.so      FreeType.java, Library.loadNative(..., "freetype")
-     * Not part of this list: libglfw.so and libSDL3.so (built into the APK by app/src/main/cpp),
-     * libopenal.so (not built by this CI), and jemalloc (not used: org.lwjgl.system.allocator=system).
+     *  - libopenal.so        ALC.java, Library.loadNative(..., "openal"). The CI copies PojavLauncherTeam's
+     *                        prebuilt OpenAL Soft here; LWJGL's OpenAL binding has no native build of its own.
+     * Not part of this list: libglfw.so and libSDL3.so (built into the APK by app/src/main/cpp), and jemalloc
+     * (not used: org.lwjgl.system.allocator=system).
      * Extra libraries in a release (nanovg, opengles, vma, shaderc) are ignored.
      */
     private val REQUIRED_LIBRARIES = listOf(
@@ -64,6 +66,7 @@ object Lwjgl333Natives {
         "liblwjgl_stb.so",
         "liblwjgl_tinyfd.so",
         "libfreetype.so",
+        "libopenal.so",
     )
 
     private class Asset(val url: String, val sha256: String?)

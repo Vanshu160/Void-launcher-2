@@ -38,6 +38,7 @@ Check each library's own license before adding it.
 - **Checked:** AArch64 ELF shared object. Exports the full EGL API (eglChooseConfig, eglCreateWindowSurface, eglGetProcAddress and others). Depends only on liblog, libc, libm and libdl.
 - **APK copy:** `app/src/main/assets/licenses/gl4es-LICENSE.txt`, byte-identical to the file above, so the notice ships inside the APK.
 - **Status:** license text verified verbatim. Not verified: that the binary was built from upstream source at a specific revision. The Pojav repository does not record a build recipe for it, and the upstream clone is shallow, so its history was not checked.
+- **Version label:** the library's own startup banner reports `v1.1.5 built on Jun 7 2026` (seen on a device run), while the upstream CHANGELOG in our reference clone's latest entry is v1.1.4. The "1.1.4" label used in the app's log is therefore not verified. The banner is the only version evidence available, and it is reported as-is.
 
 ## NG-GL4ES renderer (native, built from source at compile time, experimental)
 - **Project:** NG-GL4ES (https://github.com/BZLZHH/NG-GL4ES), an OpenGL-over-OpenGL-ES renderer that uses glslang and SPIRV-Cross for shader conversion
@@ -132,6 +133,7 @@ Check each library's own license before adding it.
 - **Source:** PojavLauncherTeam/lwjgl3 (https://github.com/PojavLauncherTeam/lwjgl3), branch `wip/rebase_3.3.3`
 - **License:** BSD 3-Clause (same as upstream LWJGL)
 - **How it's built:** `.github/workflows/build-lwjgl-arm64.yml` runs that project's own `ci_build_android.bash` for arm64 and publishes the resulting `.so` files as a GitHub Release (`lwjgl-3.3.3-arm64`) in this repository. The app downloads them at first launch (`Lwjgl333Natives.kt`), the same per-version natives folder pattern PojavLauncher's own `GameRunner` uses.
+- **OpenAL (`libopenal.so`):** not built from source by this CI. The LWJGL OpenAL binding is Java-only, so `ci_build_android.bash` downloads PojavLauncherTeam's prebuilt `libopenal.so` (`https://github.com/PojavLauncherTeam/PojavLauncher/raw/v3_openjdk/app_pojavlauncher/src/main/jniLibs/arm64-v8a/libopenal.so`) and the workflow copies it into the release unchanged. Upstream OpenAL Soft is licensed LGPL-2.0 or later (https://github.com/kcat/openal-soft, README and COPYING). The binary's own openal-soft version and build recipe were not verified, and its SHA-256 is written to the workflow log at each run.
 - **Status:** this is a real native compile of third-party, in-progress (unreleased) upstream code. It needs to be run and verified in GitHub Actions before it produces anything; see CHECKLIST.md.
 
 ## JNA native dispatch library (per game version, downloaded from Maven Central)
