@@ -35,6 +35,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** Releases every held key and button when the app leaves the foreground, so nothing stays pressed in the game. */
+    override fun onPause() {
+        super.onPause()
+        GameSurfaceBridge.onAppPaused()
+    }
+
     /**
      * Key events reach the activity rather than the game view, so while the game screen is shown they are
      * routed to [GameInput] first. Everything else follows the normal path.

@@ -58,6 +58,11 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val colors = MaterialTheme.colorScheme
     var tab by rememberSaveable { mutableIntStateOf(0) }
+    var editingLayout by rememberSaveable { mutableStateOf(false) }
+    if (editingLayout) {
+        TouchLayoutEditor(onDone = { editingLayout = false })
+        return
+    }
 
     val tabs = listOf(
         VoidTab("Video", Icons.Filled.Image),
@@ -135,13 +140,33 @@ fun SettingsScreen(viewModel: SettingsViewModel) {
                             valueText = "${(state.touchSensitivity * 100).roundToInt()}%",
                             onChange = { value -> viewModel.edit { it.copy(touchSensitivity = value) } },
                         )
+                        SettingSwitch(
+                            title = "On-screen controls",
+                            description = "Show the movement stick and action buttons in the game.",
+                            checked = state.touchControls,
+                            onChange = { value -> viewModel.edit { it.copy(touchControls = value) } },
+                        )
                         SettingSlider(
                             title = "Control scale",
-                            description = "Make on-screen buttons larger or smaller. Saved, not applied yet.",
+                            description = "Make on-screen buttons larger or smaller.",
                             value = state.controlScale,
                             range = 0.5f..1.5f,
                             valueText = "${(state.controlScale * 100).roundToInt()}%",
                             onChange = { value -> viewModel.edit { it.copy(controlScale = value) } },
+                        )
+                        SettingSlider(
+                            title = "Button opacity",
+                            description = "How solid the on-screen buttons look.",
+                            value = state.touchOpacity,
+                            range = 0.2f..1f,
+                            valueText = "${(state.touchOpacity * 100).roundToInt()}%",
+                            onChange = { value -> viewModel.edit { it.copy(touchOpacity = value) } },
+                        )
+                        SettingAction(
+                            title = "Button layout",
+                            description = "Drag buttons to new places. Each screen shape keeps its own layout.",
+                            actionText = "Edit",
+                            onClick = { editingLayout = true },
                         )
                         KeybindSection(viewModel = viewModel)
                     }
@@ -298,6 +323,40 @@ private fun KeybindRow(
             style = MaterialTheme.typography.titleMedium,
             color = if (capturing) colors.secondary else colors.primary,
         )
+    }
+}
+
+/** A setting that opens another screen or runs an action, shown as a text button. */
+@Composable
+private fun SettingAction(
+    title: String,
+    description: String,
+    actionText: String,
+    onClick: () -> Unit,
+) {
+    val colors = MaterialTheme.colorScheme
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Column(modifier = Modifier.padding(end = 12.dp)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                color = colors.onSurface,
+            )
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.onSurfaceVariant,
+            )
+        }
+        TextButton(onClick = onClick) {
+            Text(actionText, color = colors.primary)
+        }
     }
 }
 

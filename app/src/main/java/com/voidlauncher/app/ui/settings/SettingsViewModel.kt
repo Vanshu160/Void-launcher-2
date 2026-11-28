@@ -6,6 +6,7 @@ import com.voidlauncher.app.data.AppPrefs
 import com.voidlauncher.app.data.launch.GameAction
 import com.voidlauncher.app.data.launch.GameInputSettings
 import com.voidlauncher.app.data.launch.GameKeybinds
+import com.voidlauncher.app.data.launch.TouchControls
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -59,8 +60,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         GameKeybinds.update(bindings)
     }
 
-    // The game screen reads touch options from GameInputSettings, so every change is pushed there.
+    // The game screen reads touch options from GameInputSettings and the on-screen controls from TouchControls,
+    // so every change is pushed to both.
     private fun pushInputSettings(state: SettingsUiState) {
         GameInputSettings.update(state.touchSensitivity, state.touchpadMode, state.disableGestures)
+        TouchControls.applySettings(state.touchControls, state.controlScale, state.touchOpacity)
     }
 }

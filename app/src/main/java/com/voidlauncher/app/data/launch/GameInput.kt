@@ -5,10 +5,19 @@ import android.os.Looper
 import android.view.KeyEvent
 import android.view.MotionEvent
 import git.artdeell.dnbootstrap.glfw.GLFW
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+
+/** One change to a finger on the game surface, as [TouchRouter] passes it on. */
+enum class PointerAction { DOWN, MOVE, UP }
 
 /**
  * Forwards Android touch, mouse, stylus and keyboard input to GLFW, following PojavLauncher's GameView,
  * InGameEventProcessor, LeftClickGesture, RightClickGesture and GLFWBackend.
+ *
+ * [TouchRouter] decides which finger is camera and cursor input and which is an on-screen control, then calls
+ * [onPointer] for each camera finger, with its pointer id. Several fingers can be on the surface at once.
  *
  * Touch model (one primary finger, one optional second finger):
  * - A finger press sends a left button press. Lifting it sends the release, so holding a finger mines or attacks.
@@ -25,6 +34,9 @@ import git.artdeell.dnbootstrap.glfw.GLFW
  *
  * Keys are sent synchronously, because Android needs the handled result at once. Back sends Escape, as
  * PojavLauncher does, unless the on-screen keyboard is open, in which case Back closes the keyboard.
+ *
+ * Mouse buttons pressed by fingers are held through [HeldInputs] under [FINGER], so a button an on-screen control
+ * also holds (attack or use) is not released early.
  *
  * Threading: everything here runs on the Android main thread. Cursor callbacks from the JVM thread are posted
  * to the main thread. GLFW input is sent only while [GameSurfaceBridge.inputReady] is true.
@@ -60,7 +72,15 @@ object GameInput {
 
     private const val NO_POINTER = -1
 
+    /** The owner of the mouse buttons that camera fingers hold. */
+    private val FINGER = Any()
+
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    private val inWorldState = MutableStateFlow(false)
+
+    /** True while Minecraft holds the cursor, which is when the in-world touch controls are shown. */
+    val inWorld: StateFlow<Boolean> = inWorldState.asStateFlow()
 
     // Main thread only.
     private var windowWidth = 0
@@ -106,9 +126,14 @@ object GameInput {
         mainHandler.post { reset() }
     }
 
-    /** Clears per-game input state. Held buttons are not sent, so call [releaseHeld] first if they must be released. */
+    /**
+     * Clears per-game input state, including every held key and button bookkeeping and the touch routing. Keys are
+     * not sent, so call [releaseHeld] first if the game is still running and they must be released.
+     */
     fun reset() {
         mainHandler.removeCallbacks(longPressRunnable)
+        HeldInputs.releaseAll()
+        TouchRouter.reset()
         primaryId = NO_POINTER
         primaryIsMouse = false
         primaryMoved = false
@@ -119,6 +144,7 @@ object GameInput {
         scrollRemainder = 0f
         ignoreUntilUp = false
         grabbed = false
+        inWorldState.value = false
     }
 
     /** Called on the main thread when the game surface size is known. */
@@ -130,13 +156,16 @@ object GameInput {
 
     /**
      * Called from the JVM thread when Minecraft grabs or releases the cursor. A held button is released
-     * first, so Minecraft never sees a press from the old mode without its release.
+     * first, so Minecraft never sees a press from the old mode without its release. The touch controls are then
+     * told the context changed, so they stop holding keys that belong to the old mode.
      */
     fun onGameGrabState(isGrabbing: Boolean) {
         mainHandler.post {
             if (isGrabbing == grabbed) return@post
             releaseHeld()
             grabbed = isGrabbing
+            inWorldState.value = isGrabbing
+            TouchRouter.onContextChanged()
         }
     }
 
@@ -150,13 +179,12 @@ object GameInput {
     }
 
     /**
-     * Releases every button this controller is holding and cancels any gesture in progress. Sends nothing
+     * Releases every button the fingers are holding and cancels any gesture in progress. Sends nothing
      * unless GLFW input is ready, so it is safe to call during teardown. Main thread only.
      */
     fun releaseHeld() {
         mainHandler.removeCallbacks(longPressRunnable)
-        if (leftHeld) sendButton(BUTTON_LEFT, GLFW_RELEASE, 0)
-        if (rightHeld) sendButton(BUTTON_RIGHT, GLFW_RELEASE, 0)
+        HeldInputs.releaseOwner(FINGER)
         leftHeld = false
         rightHeld = false
         primaryId = NO_POINTER
@@ -166,24 +194,21 @@ object GameInput {
         ignoreUntilUp = false
     }
 
-    /** Handles a touch event on the game surface. Always consumes it while the game screen is shown. */
-    fun onTouch(event: MotionEvent): Boolean {
-        if (!GameSurfaceBridge.inputReady) return true
-        when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN -> pointerDown(event, 0)
-            MotionEvent.ACTION_POINTER_DOWN -> pointerDown(event, event.actionIndex)
-            MotionEvent.ACTION_MOVE -> for (i in 0 until event.pointerCount) pointerMove(event, i)
-            MotionEvent.ACTION_POINTER_UP -> pointerUp(event, event.actionIndex)
-            MotionEvent.ACTION_UP -> {
-                pointerUp(event, event.actionIndex)
-                // The last finger is up, so every gesture state can be cleared.
-                ignoreUntilUp = false
-                primaryId = NO_POINTER
-                secondaryId = NO_POINTER
-            }
-            MotionEvent.ACTION_CANCEL -> releaseHeld()
+    /** Called when no finger is on the game surface, so the gesture state starts again. */
+    fun onAllPointersUp() {
+        ignoreUntilUp = false
+        primaryId = NO_POINTER
+        secondaryId = NO_POINTER
+    }
+
+    /** Handles one camera finger, as [TouchRouter] routes it. Main thread only. */
+    fun onPointer(action: PointerAction, id: Int, x: Float, y: Float, isMouse: Boolean, eventTime: Long) {
+        if (!GameSurfaceBridge.inputReady) return
+        when (action) {
+            PointerAction.DOWN -> pointerDown(id, x, y, isMouse, eventTime)
+            PointerAction.MOVE -> pointerMove(id, x, y)
+            PointerAction.UP -> pointerUp(id, x, y, eventTime)
         }
-        return true
     }
 
     /** Handles hover, scroll and mouse button events. Returns true if the event was consumed. */
@@ -264,15 +289,12 @@ object GameInput {
 
     // ---- Touch -------------------------------------------------------------------------------------
 
-    private fun pointerDown(event: MotionEvent, index: Int) {
-        val id = event.getPointerId(index)
-        val x = event.getX(index)
-        val y = event.getY(index)
+    private fun pointerDown(id: Int, x: Float, y: Float, isMouse: Boolean, eventTime: Long) {
         if (ignoreUntilUp) return
 
         if (primaryId == NO_POINTER) {
             primaryId = id
-            primaryIsMouse = event.getToolType(index) == MotionEvent.TOOL_TYPE_MOUSE
+            primaryIsMouse = isMouse
             primaryDownX = x
             primaryDownY = y
             primaryX = x
@@ -287,7 +309,7 @@ object GameInput {
                 return
             }
             if (!grabbed && !touchpadMode()) moveCursor(x, y)
-            press(BUTTON_LEFT, 0)
+            press(BUTTON_LEFT)
             if (!gesturesDisabled()) {
                 mainHandler.postDelayed(longPressRunnable, LONG_PRESS_MS)
             }
@@ -302,20 +324,16 @@ object GameInput {
             secondaryY = y
             secondaryDownX = x
             secondaryDownY = y
-            twoFingerStartAt = event.eventTime
+            twoFingerStartAt = eventTime
             twoFingerMoved = false
             scrollRemainder = 0f
             twoFingerLastCentroidY = (primaryY + secondaryY) / 2f
-            if (leftHeld) press(BUTTON_LEFT, 0, pressed = false)
+            if (leftHeld) press(BUTTON_LEFT, pressed = false)
         }
         // Any other finger is ignored.
     }
 
-    private fun pointerMove(event: MotionEvent, index: Int) {
-        val id = event.getPointerId(index)
-        val x = event.getX(index)
-        val y = event.getY(index)
-
+    private fun pointerMove(id: Int, x: Float, y: Float) {
         if (secondaryId != NO_POINTER && (id == primaryId || id == secondaryId)) {
             if (id == primaryId) {
                 primaryX = x
@@ -343,10 +361,9 @@ object GameInput {
         lastPrimaryY = y
     }
 
-    private fun pointerUp(event: MotionEvent, index: Int) {
-        val id = event.getPointerId(index)
+    private fun pointerUp(id: Int, x: Float, y: Float, eventTime: Long) {
         if (secondaryId != NO_POINTER && (id == primaryId || id == secondaryId)) {
-            endTwoFingerGesture(event.eventTime)
+            endTwoFingerGesture(eventTime)
             // Whichever finger remains is ignored until every finger is up.
             ignoreUntilUp = true
             if (id == primaryId) primaryId = NO_POINTER
@@ -359,10 +376,8 @@ object GameInput {
         primaryId = NO_POINTER
         if (ignoreUntilUp) return
         if (primaryIsMouse) return
-        val x = event.getX(index)
-        val y = event.getY(index)
         if (!grabbed && !touchpadMode()) moveCursor(x, y)
-        if (leftHeld) press(BUTTON_LEFT, 0, pressed = false)
+        if (leftHeld) press(BUTTON_LEFT, pressed = false)
     }
 
     private fun twoFingerMove() {
@@ -389,10 +404,10 @@ object GameInput {
     private fun endTwoFingerGesture(eventTime: Long) {
         val quick = eventTime - twoFingerStartAt <= TWO_FINGER_TAP_MS
         if (!twoFingerMoved && quick && !gesturesDisabled()) {
-            press(BUTTON_RIGHT, 0)
-            press(BUTTON_RIGHT, 0, pressed = false)
+            press(BUTTON_RIGHT)
+            press(BUTTON_RIGHT, pressed = false)
         }
-        if (leftHeld) press(BUTTON_LEFT, 0, pressed = false)
+        if (leftHeld) press(BUTTON_LEFT, pressed = false)
         twoFingerMoved = false
         scrollRemainder = 0f
     }
@@ -401,14 +416,14 @@ object GameInput {
         if (primaryId == NO_POINTER || primaryMoved || secondaryId != NO_POINTER || ignoreUntilUp) return
         if (primaryIsMouse || gesturesDisabled()) return
         // Left stays held, so a long press while mining does not stop the mining.
-        press(BUTTON_RIGHT, 0)
-        press(BUTTON_RIGHT, 0, pressed = false)
+        press(BUTTON_RIGHT)
+        press(BUTTON_RIGHT, pressed = false)
     }
 
     // ---- Sending -----------------------------------------------------------------------------------
 
-    /** Presses or releases a button. The left button tracks its own state, so a release is never sent twice. */
-    private fun press(button: Int, mods: Int, pressed: Boolean = true) {
+    /** Presses or releases a button for the fingers. The left and right buttons track their own state, so a release is never sent twice. */
+    private fun press(button: Int, pressed: Boolean = true) {
         when (button) {
             BUTTON_LEFT -> {
                 if (pressed == leftHeld) return
@@ -419,12 +434,7 @@ object GameInput {
                 rightHeld = pressed
             }
         }
-        sendButton(button, if (pressed) GLFW_PRESS else GLFW_RELEASE, mods)
-    }
-
-    private fun sendButton(button: Int, state: Int, mods: Int) {
-        if (!GameSurfaceBridge.inputReady) return
-        GLFW.sendMouseEvent(button, state, mods)
+        HeldInputs.setButton(FINGER, button, pressed)
     }
 
     private fun moveCursor(x: Float, y: Float) {

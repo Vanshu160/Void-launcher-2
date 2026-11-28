@@ -16,6 +16,8 @@ object SettingsStore {
             fullscreen = AppPrefs.bool("fullscreen", d.fullscreen),
             vsync = AppPrefs.bool("vsync", d.vsync),
             controlScale = AppPrefs.float("controlScale", d.controlScale).coerceIn(0.5f, 1.5f),
+            touchControls = AppPrefs.bool("touchControls", d.touchControls),
+            touchOpacity = AppPrefs.float("touchOpacity", d.touchOpacity).coerceIn(0.2f, 1f),
             disableGestures = AppPrefs.bool("disableGestures", d.disableGestures),
             touchSensitivity = AppPrefs.float("touchSensitivity", d.touchSensitivity).coerceIn(0.25f, 3f),
             touchpadMode = AppPrefs.bool("touchpadMode", d.touchpadMode),
@@ -32,6 +34,8 @@ object SettingsStore {
             editor.putBoolean("fullscreen", state.fullscreen)
             editor.putBoolean("vsync", state.vsync)
             editor.putFloat("controlScale", state.controlScale)
+            editor.putBoolean("touchControls", state.touchControls)
+            editor.putFloat("touchOpacity", state.touchOpacity)
             editor.putBoolean("disableGestures", state.disableGestures)
             editor.putFloat("touchSensitivity", state.touchSensitivity)
             editor.putBoolean("touchpadMode", state.touchpadMode)

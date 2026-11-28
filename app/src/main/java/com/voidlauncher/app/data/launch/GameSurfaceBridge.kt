@@ -163,9 +163,9 @@ object GameSurfaceBridge {
         if (uiTexture === texture) {
             uiTexture = null
             AppLog.write("Game surface destroyed")
-            // Release held buttons while GLFW can still receive them, then stop routing input. The grab state is
-            // kept: Minecraft still holds the cursor across a surface change, such as rotation.
-            GameInput.releaseHeld()
+            // Release held keys and buttons while GLFW can still receive them, then stop routing input. The grab state
+            // is kept: Minecraft still holds the cursor across a surface change, such as rotation.
+            TouchRouter.cancelAll()
             inputReady = false
         }
         glfwThread.execute {
@@ -186,8 +186,17 @@ object GameSurfaceBridge {
      */
     fun endGame() {
         inputReady = false
+        TouchRouter.cancelAllFromAnyThread()
         glfwThread.execute { glfwReady = false }
         activeState.value = false
+    }
+
+    /**
+     * Called on the main thread when the app goes to the background. Keys and buttons held by fingers or touch
+     * controls are released, so nothing stays pressed in the game while the app is away.
+     */
+    fun onAppPaused() {
+        TouchRouter.cancelAll()
     }
 
     // Runs on glfwThread only.

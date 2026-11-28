@@ -7,6 +7,8 @@ data class SettingsUiState(
     val fullscreen: Boolean = true,
     val vsync: Boolean = false,
     val controlScale: Float = 1f,
+    val touchControls: Boolean = true,
+    val touchOpacity: Float = 0.6f,
     val disableGestures: Boolean = false,
     val touchSensitivity: Float = 1f,
     val touchpadMode: Boolean = false,

@@ -70,4 +70,7 @@ dependencies {
     implementation(libs.xz)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
+
+    // Pure-Kotlin tests of the touch input logic. They do not run on a device.
+    testImplementation(libs.junit)
 }

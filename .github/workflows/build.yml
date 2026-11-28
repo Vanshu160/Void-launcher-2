@@ -28,6 +28,10 @@ jobs:
         with:
           gradle-version: 9.6.0
 
+      # Unit tests of the pure-Kotlin input logic: held-key counting, joystick mapping, hit testing and layout parsing.
+      - name: Run unit tests
+        run: gradle testDebugUnitTest --stacktrace
+
       - name: Build debug APK
         run: gradle assembleDebug --stacktrace
 

@@ -38,6 +38,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.voidlauncher.app.data.launch.GameInput
 import com.voidlauncher.app.data.launch.GameSurfaceBridge
 import com.voidlauncher.app.data.launch.GameTextInput
+import com.voidlauncher.app.data.launch.TouchRouter
 import com.voidlauncher.app.data.log.AppLog
 
 /**
@@ -65,6 +66,7 @@ fun GameSurfaceOverlay() {
         )
         GameKeyboardHost()
         if (ready) {
+            TouchControlsOverlay()
             GameControls()
         } else {
             LaunchStatus(status)
@@ -185,11 +187,9 @@ private class GameTextureView(context: Context) : TextureView(context) {
         }
     }
 
-    // The game screen takes every touch while it is shown, so none reach the launcher underneath.
-    override fun onTouchEvent(event: MotionEvent): Boolean {
-        GameInput.onTouch(event)
-        return true
-    }
+    // The game screen takes every touch while it is shown, so none reach the launcher underneath. TouchRouter gives
+    // each finger to an on-screen control or to GameInput.
+    override fun onTouchEvent(event: MotionEvent): Boolean = TouchRouter.onMotion(this, event)
 
     override fun onGenericMotionEvent(event: MotionEvent): Boolean =
         GameInput.onGenericMotion(event) || super.onGenericMotionEvent(event)
